@@ -103,7 +103,11 @@ X_ACCESS_TOKEN_SECRET=<Access Token Secret from step 2c>
 
 ---
 
-## Step 4: Register with Claude Code
+## Step 4: Register with Your Client
+
+Determine which client the user is using and follow the corresponding instructions. Only one of these is needed.
+
+### Claude Code
 
 Run this command (replace the path with the actual absolute path to the cloned repo):
 
@@ -111,9 +115,7 @@ Run this command (replace the path with the actual absolute path to the cloned r
 claude mcp add --scope user x-twitter -- node /absolute/path/to/x-mcp/dist/index.js
 ```
 
-Then restart Claude Code.
-
-To verify it's working:
+Then restart Claude Code. To verify:
 
 ```bash
 claude mcp list
@@ -121,9 +123,7 @@ claude mcp list
 
 The output should show `x-twitter: ... - Connected`.
 
----
-
-## Step 5: Register with Claude Desktop (Optional)
+### Claude Desktop
 
 Add to `claude_desktop_config.json`:
 
@@ -147,6 +147,125 @@ Add to `claude_desktop_config.json`:
   }
 }
 ```
+
+Restart Claude Desktop after saving.
+
+### Cursor
+
+Add to the Cursor MCP config file:
+
+- **Global** (all projects): `~/.cursor/mcp.json`
+- **Project-scoped**: `.cursor/mcp.json` in the project root
+
+```json
+{
+  "mcpServers": {
+    "x-twitter": {
+      "command": "node",
+      "args": ["/absolute/path/to/x-mcp/dist/index.js"],
+      "env": {
+        "X_API_KEY": "value",
+        "X_API_SECRET": "value",
+        "X_ACCESS_TOKEN": "value",
+        "X_ACCESS_TOKEN_SECRET": "value",
+        "X_BEARER_TOKEN": "value"
+      }
+    }
+  }
+}
+```
+
+Verify in Cursor: Settings > MCP Servers -- the server should appear as connected.
+
+### OpenAI Codex
+
+**Option A -- CLI:**
+
+```bash
+codex mcp add x-twitter --env X_API_KEY=value --env X_API_SECRET=value --env X_ACCESS_TOKEN=value --env X_ACCESS_TOKEN_SECRET=value --env X_BEARER_TOKEN=value -- node /absolute/path/to/x-mcp/dist/index.js
+```
+
+**Option B -- config.toml:**
+
+Add to `~/.codex/config.toml` (global) or `.codex/config.toml` (project-scoped):
+
+```toml
+[mcp_servers.x-twitter]
+command = "node"
+args = ["/absolute/path/to/x-mcp/dist/index.js"]
+
+[mcp_servers.x-twitter.env]
+X_API_KEY = "value"
+X_API_SECRET = "value"
+X_ACCESS_TOKEN = "value"
+X_ACCESS_TOKEN_SECRET = "value"
+X_BEARER_TOKEN = "value"
+```
+
+The CLI and the Codex VS Code extension share this config -- set it up once and both work.
+
+### Windsurf
+
+Add to the Windsurf MCP config:
+
+- **macOS**: `~/.codeium/windsurf/mcp_config.json`
+- **Windows**: `%USERPROFILE%\.codeium\windsurf\mcp_config.json`
+
+```json
+{
+  "mcpServers": {
+    "x-twitter": {
+      "command": "node",
+      "args": ["/absolute/path/to/x-mcp/dist/index.js"],
+      "env": {
+        "X_API_KEY": "value",
+        "X_API_SECRET": "value",
+        "X_ACCESS_TOKEN": "value",
+        "X_ACCESS_TOKEN_SECRET": "value",
+        "X_BEARER_TOKEN": "value"
+      }
+    }
+  }
+}
+```
+
+Can also be added from Windsurf Settings > Cascade > MCP Servers.
+
+### Cline (VS Code)
+
+Open Cline's MCP settings: click the MCP Servers icon in Cline's top navigation bar, then click "Configure MCP Servers" to open `cline_mcp_settings.json`. Add:
+
+```json
+{
+  "mcpServers": {
+    "x-twitter": {
+      "command": "node",
+      "args": ["/absolute/path/to/x-mcp/dist/index.js"],
+      "env": {
+        "X_API_KEY": "value",
+        "X_API_SECRET": "value",
+        "X_ACCESS_TOKEN": "value",
+        "X_ACCESS_TOKEN_SECRET": "value",
+        "X_BEARER_TOKEN": "value"
+      },
+      "alwaysAllow": [],
+      "disabled": false
+    }
+  }
+}
+```
+
+### Any Other MCP Client
+
+This is a standard stdio MCP server. Point your client at:
+
+```
+node /absolute/path/to/x-mcp/dist/index.js
+```
+
+With environment variables: `X_API_KEY`, `X_API_SECRET`, `X_ACCESS_TOKEN`, `X_ACCESS_TOKEN_SECRET`, `X_BEARER_TOKEN`.
+
+In all cases, replace `/absolute/path/to/x-mcp` with the actual path where the repo was cloned, and replace `value` with the actual credentials from Step 2.
 
 ---
 

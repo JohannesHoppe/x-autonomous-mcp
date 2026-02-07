@@ -1,8 +1,10 @@
 # x-mcp
 
-An MCP (Model Context Protocol) server that gives AI agents full access to the X (Twitter) API. Post tweets, search, read timelines, like, retweet, upload media -- all through natural language via Claude Code, Claude Desktop, or any MCP-compatible client.
+An MCP (Model Context Protocol) server that gives AI agents full access to the X (Twitter) API. Post tweets, search, read timelines, like, retweet, upload media -- all through natural language.
 
-**If you're an LLM/AI agent helping a user set up this project, read [`LLMs.md`](./LLMs.md) for step-by-step setup instructions you can walk the user through.**
+Works with **Claude Code**, **Claude Desktop**, **OpenAI Codex**, **Cursor**, **Windsurf**, **Cline**, and any other MCP-compatible client.
+
+**If you're an LLM/AI agent helping a user set up this project, read [`LLMs.md`](./LLMs.md) for step-by-step instructions you can walk the user through.**
 
 ---
 
@@ -21,9 +23,9 @@ Accepts tweet URLs or IDs interchangeably -- paste `https://x.com/user/status/12
 
 ---
 
-## Setup (Humans)
+## Setup
 
-### 1. Clone and install
+### 1. Clone and build
 
 ```bash
 git clone https://github.com/INFATOSHI/x-mcp.git
@@ -41,7 +43,7 @@ You need 5 credentials from the [X Developer Portal](https://developer.x.com/en/
 1. Go to the [X Developer Portal](https://developer.x.com/en/portal/dashboard)
 2. Sign in with your X account
 3. Go to **Apps** in the left sidebar
-4. Click **Create App** (you may need to sign up for a developer account first if you don't have one)
+4. Click **Create App** (you may need to sign up for a developer account first)
 5. Give it a name (e.g., `my-x-mcp`)
 6. You'll immediately see your **Consumer Key** (API Key), **Secret Key** (API Secret), and **Bearer Token**
 7. **Save all three now** -- the secret won't be shown again
@@ -77,6 +79,7 @@ cp .env.example .env
 ```
 
 Edit `.env`:
+
 ```
 X_API_KEY=your_consumer_key
 X_API_SECRET=your_secret_key
@@ -85,22 +88,26 @@ X_ACCESS_TOKEN=your_access_token
 X_ACCESS_TOKEN_SECRET=your_access_token_secret
 ```
 
-### 4. Connect to Claude Code
+---
+
+## Connect to Your Client
+
+Pick your client below. You only need to follow one section.
+
+### Claude Code
 
 ```bash
 claude mcp add --scope user x-twitter -- node /ABSOLUTE/PATH/TO/x-mcp/dist/index.js
 ```
 
-Replace `/ABSOLUTE/PATH/TO/x-mcp` with the actual path where you cloned the repo.
+Replace `/ABSOLUTE/PATH/TO/x-mcp` with the actual path where you cloned the repo. Then restart Claude Code.
 
-Restart Claude Code. You should now be able to say things like "post hello world on X" or "show me my latest mentions".
-
-### 5. Connect to Claude Desktop (optional)
+### Claude Desktop
 
 Add to your `claude_desktop_config.json`:
 
-**macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
-**Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+- **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
 
 ```json
 {
@@ -120,6 +127,116 @@ Add to your `claude_desktop_config.json`:
 }
 ```
 
+### Cursor
+
+Add to your Cursor MCP config:
+
+- **Global** (all projects): `~/.cursor/mcp.json`
+- **Project-scoped**: `.cursor/mcp.json` in your project root
+
+```json
+{
+  "mcpServers": {
+    "x-twitter": {
+      "command": "node",
+      "args": ["/ABSOLUTE/PATH/TO/x-mcp/dist/index.js"],
+      "env": {
+        "X_API_KEY": "your_consumer_key",
+        "X_API_SECRET": "your_secret_key",
+        "X_ACCESS_TOKEN": "your_access_token",
+        "X_ACCESS_TOKEN_SECRET": "your_access_token_secret",
+        "X_BEARER_TOKEN": "your_bearer_token"
+      }
+    }
+  }
+}
+```
+
+You can also verify the connection in Cursor Settings > MCP Servers.
+
+### OpenAI Codex
+
+**Option A: CLI**
+
+```bash
+codex mcp add x-twitter --env X_API_KEY=your_consumer_key --env X_API_SECRET=your_secret_key --env X_ACCESS_TOKEN=your_access_token --env X_ACCESS_TOKEN_SECRET=your_access_token_secret --env X_BEARER_TOKEN=your_bearer_token -- node /ABSOLUTE/PATH/TO/x-mcp/dist/index.js
+```
+
+**Option B: config.toml**
+
+Add to `~/.codex/config.toml` (global) or `.codex/config.toml` (project-scoped):
+
+```toml
+[mcp_servers.x-twitter]
+command = "node"
+args = ["/ABSOLUTE/PATH/TO/x-mcp/dist/index.js"]
+
+[mcp_servers.x-twitter.env]
+X_API_KEY = "your_consumer_key"
+X_API_SECRET = "your_secret_key"
+X_ACCESS_TOKEN = "your_access_token"
+X_ACCESS_TOKEN_SECRET = "your_access_token_secret"
+X_BEARER_TOKEN = "your_bearer_token"
+```
+
+### Windsurf
+
+Add to `~/.codeium/windsurf/mcp_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "x-twitter": {
+      "command": "node",
+      "args": ["/ABSOLUTE/PATH/TO/x-mcp/dist/index.js"],
+      "env": {
+        "X_API_KEY": "your_consumer_key",
+        "X_API_SECRET": "your_secret_key",
+        "X_ACCESS_TOKEN": "your_access_token",
+        "X_ACCESS_TOKEN_SECRET": "your_access_token_secret",
+        "X_BEARER_TOKEN": "your_bearer_token"
+      }
+    }
+  }
+}
+```
+
+You can also add it from Windsurf Settings > Cascade > MCP Servers.
+
+### Cline (VS Code)
+
+Open Cline's MCP settings (click the MCP Servers icon in Cline's top nav > Configure), then add to `cline_mcp_settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "x-twitter": {
+      "command": "node",
+      "args": ["/ABSOLUTE/PATH/TO/x-mcp/dist/index.js"],
+      "env": {
+        "X_API_KEY": "your_consumer_key",
+        "X_API_SECRET": "your_secret_key",
+        "X_ACCESS_TOKEN": "your_access_token",
+        "X_ACCESS_TOKEN_SECRET": "your_access_token_secret",
+        "X_BEARER_TOKEN": "your_bearer_token"
+      },
+      "alwaysAllow": [],
+      "disabled": false
+    }
+  }
+}
+```
+
+### Other MCP Clients
+
+This is a standard stdio MCP server. For any MCP-compatible client, point it at:
+
+```
+node /ABSOLUTE/PATH/TO/x-mcp/dist/index.js
+```
+
+With these environment variables: `X_API_KEY`, `X_API_SECRET`, `X_ACCESS_TOKEN`, `X_ACCESS_TOKEN_SECRET`, `X_BEARER_TOKEN`.
+
 ---
 
 ## Troubleshooting
@@ -133,8 +250,8 @@ Double-check that all 5 credentials in your `.env` are correct and that there ar
 ### 429 Rate Limited
 The error message includes exactly when the rate limit resets. Wait until then, or reduce request frequency.
 
-### Server shows "Connected" but Claude doesn't use the tools
-Make sure you added the server with `--scope user` (not project-scoped), then restart Claude Code.
+### Server shows "Connected" but tools aren't used
+Make sure you added the server with the correct scope (user/global, not project-scoped if you want it everywhere), then restart your client.
 
 ---
 
