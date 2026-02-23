@@ -69,16 +69,20 @@ function formatResult(data: unknown, rateLimit: string): string {
 
 // ============================================================
 // TWEET TOOLS
+// All tools use .strict() schemas — unknown parameters cause
+// a validation error instead of being silently stripped.
 // ============================================================
 
-server.tool(
+server.registerTool(
   "post_tweet",
-  "Create a new post on X (Twitter). Supports text, polls, and media attachments.",
   {
-    text: z.string().describe("The text content of the tweet (max 280 characters)"),
-    poll_options: z.array(z.string()).optional().describe("Poll options (2-4 choices)"),
-    poll_duration_minutes: z.number().optional().describe("Poll duration in minutes (default 1440 = 24h)"),
-    media_ids: z.array(z.string()).optional().describe("Media IDs to attach (from upload_media)"),
+    description: "Create a new post on X (Twitter). Supports text, polls, and media attachments. To REPLY to a tweet, use reply_to_tweet instead.",
+    inputSchema: z.object({
+      text: z.string().describe("The text content of the tweet (max 280 characters)"),
+      poll_options: z.array(z.string()).optional().describe("Poll options (2-4 choices)"),
+      poll_duration_minutes: z.number().optional().describe("Poll duration in minutes (default 1440 = 24h)"),
+      media_ids: z.array(z.string()).optional().describe("Media IDs to attach (from upload_media)"),
+    }).strict(),
   },
   async ({ text, poll_options, poll_duration_minutes, media_ids }) => {
     try {
@@ -95,13 +99,15 @@ server.tool(
   },
 );
 
-server.tool(
+server.registerTool(
   "reply_to_tweet",
-  "Reply to an existing post on X. Provide the tweet ID or URL to reply to.",
   {
-    tweet_id: z.string().describe("The tweet ID or URL to reply to"),
-    text: z.string().describe("The reply text"),
-    media_ids: z.array(z.string()).optional().describe("Media IDs to attach"),
+    description: "Reply to an existing post on X. Provide the tweet ID or URL to reply to.",
+    inputSchema: z.object({
+      tweet_id: z.string().describe("The tweet ID or URL to reply to"),
+      text: z.string().describe("The reply text"),
+      media_ids: z.array(z.string()).optional().describe("Media IDs to attach"),
+    }).strict(),
   },
   async ({ tweet_id, text, media_ids }) => {
     try {
@@ -118,13 +124,15 @@ server.tool(
   },
 );
 
-server.tool(
+server.registerTool(
   "quote_tweet",
-  "Quote retweet a post on X. Adds your commentary above the quoted post.",
   {
-    tweet_id: z.string().describe("The tweet ID or URL to quote"),
-    text: z.string().describe("Your commentary text"),
-    media_ids: z.array(z.string()).optional().describe("Media IDs to attach"),
+    description: "Quote retweet a post on X. Adds your commentary above the quoted post.",
+    inputSchema: z.object({
+      tweet_id: z.string().describe("The tweet ID or URL to quote"),
+      text: z.string().describe("Your commentary text"),
+      media_ids: z.array(z.string()).optional().describe("Media IDs to attach"),
+    }).strict(),
   },
   async ({ tweet_id, text, media_ids }) => {
     try {
@@ -141,11 +149,13 @@ server.tool(
   },
 );
 
-server.tool(
+server.registerTool(
   "delete_tweet",
-  "Delete a post on X by its ID.",
   {
-    tweet_id: z.string().describe("The tweet ID or URL to delete"),
+    description: "Delete a post on X by its ID.",
+    inputSchema: z.object({
+      tweet_id: z.string().describe("The tweet ID or URL to delete"),
+    }).strict(),
   },
   async ({ tweet_id }) => {
     try {
@@ -158,11 +168,13 @@ server.tool(
   },
 );
 
-server.tool(
+server.registerTool(
   "get_tweet",
-  "Fetch a tweet and its metadata by ID or URL. Returns author info, metrics, and referenced tweets.",
   {
-    tweet_id: z.string().describe("The tweet ID or URL to fetch"),
+    description: "Fetch a tweet and its metadata by ID or URL. Returns author info, metrics, and referenced tweets.",
+    inputSchema: z.object({
+      tweet_id: z.string().describe("The tweet ID or URL to fetch"),
+    }).strict(),
   },
   async ({ tweet_id }) => {
     try {
@@ -179,17 +191,19 @@ server.tool(
 // SEARCH
 // ============================================================
 
-server.tool(
+server.registerTool(
   "search_tweets",
-  "Search recent tweets by query. Supports keywords, hashtags, from:user, to:user, is:reply, has:media, etc. Uses the recent search endpoint (last 7 days). Use min_likes/min_retweets to filter for high-engagement tweets only. Use sort_order=relevancy to surface popular tweets first.",
   {
-    query: z.string().describe("Search query (e.g. 'from:elonmusk', '#ai', 'machine learning')"),
-    max_results: z.number().optional().describe("Number of results to return (10-100, default 10)"),
-    min_likes: z.number().optional().describe("Only return tweets with at least this many likes"),
-    min_retweets: z.number().optional().describe("Only return tweets with at least this many retweets"),
-    sort_order: z.enum(["recency", "relevancy"]).optional().describe("Sort order: 'recency' (default) or 'relevancy' (popular first)"),
-    since_id: z.string().optional().describe("Only return tweets newer than this tweet ID (for incremental polling)"),
-    next_token: z.string().optional().describe("Pagination token from previous response"),
+    description: "Search recent tweets by query. Supports keywords, hashtags, from:user, to:user, is:reply, has:media, etc. Uses the recent search endpoint (last 7 days). Use min_likes/min_retweets to filter for high-engagement tweets only. Use sort_order=relevancy to surface popular tweets first.",
+    inputSchema: z.object({
+      query: z.string().describe("Search query (e.g. 'from:elonmusk', '#ai', 'machine learning')"),
+      max_results: z.number().optional().describe("Number of results to return (10-100, default 10)"),
+      min_likes: z.number().optional().describe("Only return tweets with at least this many likes"),
+      min_retweets: z.number().optional().describe("Only return tweets with at least this many retweets"),
+      sort_order: z.enum(["recency", "relevancy"]).optional().describe("Sort order: 'recency' (default) or 'relevancy' (popular first)"),
+      since_id: z.string().optional().describe("Only return tweets newer than this tweet ID (for incremental polling)"),
+      next_token: z.string().optional().describe("Pagination token from previous response"),
+    }).strict(),
   },
   async ({ query, max_results, min_likes, min_retweets, sort_order, since_id, next_token }) => {
     try {
@@ -210,12 +224,14 @@ server.tool(
 // USER TOOLS
 // ============================================================
 
-server.tool(
+server.registerTool(
   "get_user",
-  "Look up a user profile by username or user ID. Returns bio, metrics, verification status, etc.",
   {
-    username: z.string().optional().describe("Username (without @)"),
-    user_id: z.string().optional().describe("Numeric user ID"),
+    description: "Look up a user profile by username or user ID. Returns bio, metrics, verification status, etc.",
+    inputSchema: z.object({
+      username: z.string().optional().describe("Username (without @)"),
+      user_id: z.string().optional().describe("Numeric user ID"),
+    }).strict(),
   },
   async ({ username, user_id }) => {
     try {
@@ -230,13 +246,15 @@ server.tool(
   },
 );
 
-server.tool(
+server.registerTool(
   "get_timeline",
-  "Fetch a user's recent posts. Requires the user's numeric ID (use get_user first to resolve username to ID).",
   {
-    user_id: z.string().describe("The numeric user ID"),
-    max_results: z.number().optional().describe("Number of results (5-100, default 10)"),
-    next_token: z.string().optional().describe("Pagination token from previous response"),
+    description: "Fetch a user's recent posts. Requires the user's numeric ID (use get_user first to resolve username to ID).",
+    inputSchema: z.object({
+      user_id: z.string().describe("The numeric user ID"),
+      max_results: z.number().optional().describe("Number of results (5-100, default 10)"),
+      next_token: z.string().optional().describe("Pagination token from previous response"),
+    }).strict(),
   },
   async ({ user_id, max_results, next_token }) => {
     try {
@@ -248,13 +266,15 @@ server.tool(
   },
 );
 
-server.tool(
+server.registerTool(
   "get_mentions",
-  "Fetch recent mentions of the authenticated user. Use since_id to only get new mentions since last check (saves tokens).",
   {
-    max_results: z.number().optional().describe("Number of results (5-100, default 10)"),
-    since_id: z.string().optional().describe("Only return mentions newer than this tweet ID (for incremental polling)"),
-    next_token: z.string().optional().describe("Pagination token from previous response"),
+    description: "Fetch recent mentions of the authenticated user. Use since_id to only get new mentions since last check (saves tokens).",
+    inputSchema: z.object({
+      max_results: z.number().optional().describe("Number of results (5-100, default 10)"),
+      since_id: z.string().optional().describe("Only return mentions newer than this tweet ID (for incremental polling)"),
+      next_token: z.string().optional().describe("Pagination token from previous response"),
+    }).strict(),
   },
   async ({ max_results, since_id, next_token }) => {
     try {
@@ -266,13 +286,15 @@ server.tool(
   },
 );
 
-server.tool(
+server.registerTool(
   "get_followers",
-  "List followers of a user by their numeric user ID.",
   {
-    user_id: z.string().describe("The numeric user ID"),
-    max_results: z.number().optional().describe("Number of results (1-1000, default 100)"),
-    next_token: z.string().optional().describe("Pagination token from previous response"),
+    description: "List followers of a user by their numeric user ID.",
+    inputSchema: z.object({
+      user_id: z.string().describe("The numeric user ID"),
+      max_results: z.number().optional().describe("Number of results (1-1000, default 100)"),
+      next_token: z.string().optional().describe("Pagination token from previous response"),
+    }).strict(),
   },
   async ({ user_id, max_results, next_token }) => {
     try {
@@ -284,13 +306,15 @@ server.tool(
   },
 );
 
-server.tool(
+server.registerTool(
   "get_following",
-  "List who a user follows by their numeric user ID.",
   {
-    user_id: z.string().describe("The numeric user ID"),
-    max_results: z.number().optional().describe("Number of results (1-1000, default 100)"),
-    next_token: z.string().optional().describe("Pagination token from previous response"),
+    description: "List who a user follows by their numeric user ID.",
+    inputSchema: z.object({
+      user_id: z.string().describe("The numeric user ID"),
+      max_results: z.number().optional().describe("Number of results (1-1000, default 100)"),
+      next_token: z.string().optional().describe("Pagination token from previous response"),
+    }).strict(),
   },
   async ({ user_id, max_results, next_token }) => {
     try {
@@ -306,11 +330,13 @@ server.tool(
 // ENGAGEMENT TOOLS
 // ============================================================
 
-server.tool(
+server.registerTool(
   "like_tweet",
-  "Like a post on X.",
   {
-    tweet_id: z.string().describe("The tweet ID or URL to like"),
+    description: "Like a post on X.",
+    inputSchema: z.object({
+      tweet_id: z.string().describe("The tweet ID or URL to like"),
+    }).strict(),
   },
   async ({ tweet_id }) => {
     try {
@@ -323,11 +349,13 @@ server.tool(
   },
 );
 
-server.tool(
+server.registerTool(
   "retweet",
-  "Retweet a post on X.",
   {
-    tweet_id: z.string().describe("The tweet ID or URL to retweet"),
+    description: "Retweet a post on X.",
+    inputSchema: z.object({
+      tweet_id: z.string().describe("The tweet ID or URL to retweet"),
+    }).strict(),
   },
   async ({ tweet_id }) => {
     try {
@@ -344,13 +372,15 @@ server.tool(
 // MEDIA
 // ============================================================
 
-server.tool(
+server.registerTool(
   "upload_media",
-  "Upload an image or video to X. Returns a media_id that can be attached to posts. Provide the file as base64-encoded data.",
   {
-    media_data: z.string().describe("Base64-encoded media file data"),
-    mime_type: z.string().describe("MIME type (e.g. 'image/png', 'image/jpeg', 'video/mp4')"),
-    media_category: z.string().optional().describe("Category: 'tweet_image', 'tweet_gif', or 'tweet_video' (default: tweet_image)"),
+    description: "Upload an image or video to X. Returns a media_id that can be attached to posts. Provide the file as base64-encoded data.",
+    inputSchema: z.object({
+      media_data: z.string().describe("Base64-encoded media file data"),
+      mime_type: z.string().describe("MIME type (e.g. 'image/png', 'image/jpeg', 'video/mp4')"),
+      media_category: z.string().optional().describe("Category: 'tweet_image', 'tweet_gif', or 'tweet_video' (default: tweet_image)"),
+    }).strict(),
   },
   async ({ media_data, mime_type, media_category }) => {
     try {
@@ -375,11 +405,13 @@ server.tool(
 // METRICS
 // ============================================================
 
-server.tool(
+server.registerTool(
   "get_metrics",
-  "Get engagement metrics for a specific post (impressions, likes, retweets, replies, quotes, bookmarks). Requires the tweet to be authored by the authenticated user for non-public metrics.",
   {
-    tweet_id: z.string().describe("The tweet ID or URL to get metrics for"),
+    description: "Get engagement metrics for a specific post (impressions, likes, retweets, replies, quotes, bookmarks). Requires the tweet to be authored by the authenticated user for non-public metrics.",
+    inputSchema: z.object({
+      tweet_id: z.string().describe("The tweet ID or URL to get metrics for"),
+    }).strict(),
   },
   async ({ tweet_id }) => {
     try {
