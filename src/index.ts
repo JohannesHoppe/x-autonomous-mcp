@@ -43,8 +43,26 @@ function parseTweetId(input: string): string {
   throw new Error(`Invalid tweet ID or URL: ${input}`);
 }
 
+// Fields that waste tokens without adding value for LLM consumers
+const STRIP_FIELDS = new Set(["profile_image_url", "preview_image_url"]);
+
+function stripBloat(obj: unknown): unknown {
+  if (Array.isArray(obj)) return obj.map(stripBloat);
+  if (obj && typeof obj === "object") {
+    const cleaned: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
+      if (!STRIP_FIELDS.has(key)) {
+        cleaned[key] = stripBloat(value);
+      }
+    }
+    return cleaned;
+  }
+  return obj;
+}
+
 function formatResult(data: unknown, rateLimit: string): string {
-  const output: Record<string, unknown> = { data };
+  const cleaned = stripBloat(data);
+  const output: Record<string, unknown> = { data: cleaned };
   if (rateLimit) output.rate_limit = rateLimit;
   return JSON.stringify(output, null, 2);
 }
@@ -163,19 +181,23 @@ server.tool(
 
 server.tool(
   "search_tweets",
-  "Search recent tweets by query. Supports keywords, hashtags, from:user, to:user, is:reply, has:media, etc. Uses the recent search endpoint (last 7 days). Use min_likes/min_retweets to filter for high-engagement tweets only.",
+  "Search recent tweets by query. Supports keywords, hashtags, from:user, to:user, is:reply, has:media, etc. Uses the recent search endpoint (last 7 days). Use min_likes/min_retweets to filter for high-engagement tweets only. Use sort_order=relevancy to surface popular tweets first.",
   {
     query: z.string().describe("Search query (e.g. 'from:elonmusk', '#ai', 'machine learning')"),
     max_results: z.number().optional().describe("Number of results to return (10-100, default 10)"),
     min_likes: z.number().optional().describe("Only return tweets with at least this many likes"),
     min_retweets: z.number().optional().describe("Only return tweets with at least this many retweets"),
+    sort_order: z.enum(["recency", "relevancy"]).optional().describe("Sort order: 'recency' (default) or 'relevancy' (popular first)"),
+    since_id: z.string().optional().describe("Only return tweets newer than this tweet ID (for incremental polling)"),
     next_token: z.string().optional().describe("Pagination token from previous response"),
   },
-  async ({ query, max_results, min_likes, min_retweets, next_token }) => {
+  async ({ query, max_results, min_likes, min_retweets, sort_order, since_id, next_token }) => {
     try {
       const { result, rateLimit } = await client.searchTweets(query, max_results, next_token, {
         minLikes: min_likes,
         minRetweets: min_retweets,
+        sortOrder: sort_order,
+        sinceId: since_id,
       });
       return { content: [{ type: "text", text: formatResult(result, rateLimit) }] };
     } catch (e: unknown) {
@@ -228,14 +250,15 @@ server.tool(
 
 server.tool(
   "get_mentions",
-  "Fetch recent mentions of the authenticated user.",
+  "Fetch recent mentions of the authenticated user. Use since_id to only get new mentions since last check (saves tokens).",
   {
     max_results: z.number().optional().describe("Number of results (5-100, default 10)"),
+    since_id: z.string().optional().describe("Only return mentions newer than this tweet ID (for incremental polling)"),
     next_token: z.string().optional().describe("Pagination token from previous response"),
   },
-  async ({ max_results, next_token }) => {
+  async ({ max_results, since_id, next_token }) => {
     try {
-      const { result, rateLimit } = await client.getMentions(max_results, next_token);
+      const { result, rateLimit } = await client.getMentions(max_results, next_token, since_id);
       return { content: [{ type: "text", text: formatResult(result, rateLimit) }] };
     } catch (e: unknown) {
       return { content: [{ type: "text", text: `Error: ${(e as Error).message}` }], isError: true };

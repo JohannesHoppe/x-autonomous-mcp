@@ -192,10 +192,9 @@ export class XApiClient {
 
   async getTweet(tweetId: string) {
     const params = new URLSearchParams({
-      "tweet.fields": "created_at,public_metrics,author_id,conversation_id,in_reply_to_user_id,referenced_tweets,attachments,entities,lang",
-      expansions: "author_id,referenced_tweets.id,attachments.media_keys",
-      "user.fields": "name,username,verified,profile_image_url,public_metrics",
-      "media.fields": "url,preview_image_url,type,width,height,alt_text",
+      "tweet.fields": "created_at,public_metrics,author_id,conversation_id,in_reply_to_user_id,referenced_tweets,entities,lang",
+      expansions: "author_id,referenced_tweets.id",
+      "user.fields": "name,username,verified,public_metrics",
     });
     const url = `${API_BASE}/tweets/${tweetId}?${params}`;
     const response = await this.bearerFetch(url);
@@ -206,30 +205,31 @@ export class XApiClient {
     query: string,
     maxResults: number = 10,
     nextToken?: string,
-    filters?: { minLikes?: number; minRetweets?: number },
+    filters?: { minLikes?: number; minRetweets?: number; sortOrder?: string; sinceId?: string },
   ) {
-    const hasFilters = filters && (filters.minLikes || filters.minRetweets);
-    // When filtering, fetch max results to have enough after filtering
-    const fetchCount = hasFilters ? 100 : Math.min(Math.max(maxResults, 10), 100);
+    const hasEngagementFilters = filters && (filters.minLikes || filters.minRetweets);
+    // When filtering by engagement, fetch max results to have enough after filtering
+    const fetchCount = hasEngagementFilters ? 100 : Math.min(Math.max(maxResults, 10), 100);
 
     const params = new URLSearchParams({
       query,
       max_results: fetchCount.toString(),
       "tweet.fields": "created_at,public_metrics,author_id,conversation_id,entities,lang",
-      expansions: "author_id,attachments.media_keys",
-      "user.fields": "name,username,verified,profile_image_url",
-      "media.fields": "url,preview_image_url,type",
+      expansions: "author_id",
+      "user.fields": "name,username,verified,public_metrics",
     });
     if (nextToken) params.set("next_token", nextToken);
+    if (filters?.sortOrder) params.set("sort_order", filters.sortOrder);
+    if (filters?.sinceId) params.set("since_id", filters.sinceId);
 
     const url = `${API_BASE}/tweets/search/recent?${params}`;
     const response = await this.bearerFetch(url);
     const { result, rateLimit } = await this.handleResponse<XApiResponse>(response, "searchTweets");
 
     // Apply engagement filters client-side
-    if (hasFilters && result.data && Array.isArray(result.data)) {
-      const minLikes = filters.minLikes || 0;
-      const minRetweets = filters.minRetweets || 0;
+    if (hasEngagementFilters && result.data && Array.isArray(result.data)) {
+      const minLikes = filters!.minLikes || 0;
+      const minRetweets = filters!.minRetweets || 0;
 
       const filtered = (result.data as Array<Record<string, unknown>>).filter((tweet) => {
         const metrics = tweet.public_metrics as { like_count?: number; retweet_count?: number } | undefined;
@@ -281,9 +281,8 @@ export class XApiClient {
     const params = new URLSearchParams({
       max_results: Math.min(Math.max(maxResults, 5), 100).toString(),
       "tweet.fields": "created_at,public_metrics,author_id,conversation_id,entities,lang",
-      expansions: "author_id,attachments.media_keys,referenced_tweets.id",
+      expansions: "author_id,referenced_tweets.id",
       "user.fields": "name,username,verified",
-      "media.fields": "url,preview_image_url,type",
     });
     if (nextToken) params.set("pagination_token", nextToken);
 
@@ -292,15 +291,16 @@ export class XApiClient {
     return this.handleResponse(response, "getTimeline");
   }
 
-  async getMentions(maxResults: number = 10, nextToken?: string) {
+  async getMentions(maxResults: number = 10, nextToken?: string, sinceId?: string) {
     const userId = await this.getAuthenticatedUserId();
     const params = new URLSearchParams({
       max_results: Math.min(Math.max(maxResults, 5), 100).toString(),
-      "tweet.fields": "created_at,public_metrics,author_id,conversation_id,entities",
+      "tweet.fields": "created_at,public_metrics,author_id,conversation_id",
       expansions: "author_id",
       "user.fields": "name,username,verified",
     });
     if (nextToken) params.set("pagination_token", nextToken);
+    if (sinceId) params.set("since_id", sinceId);
 
     const url = `${API_BASE}/users/${userId}/mentions?${params}`;
     const response = await this.oauthFetch(url, "GET");

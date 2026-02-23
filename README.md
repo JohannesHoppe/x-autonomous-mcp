@@ -1,10 +1,51 @@
 # x-mcp
 
+Fork of [Infatoshi/x-mcp](https://github.com/Infatoshi/x-mcp) with improvements for autonomous AI agents: engagement filtering, relevancy sorting, incremental polling, and leaner responses to save LLM tokens.
+
 An MCP (Model Context Protocol) server that gives AI agents full access to the X (Twitter) API. Post tweets, search, read timelines, like, retweet, upload media -- all through natural language.
 
 Works with **Claude Code**, **Claude Desktop**, **OpenAI Codex**, **Cursor**, **Windsurf**, **Cline**, and any other MCP-compatible client.
 
 **If you're an LLM/AI agent helping a user set up this project, read [`LLMs.md`](./LLMs.md) for step-by-step instructions you can walk the user through.**
+
+---
+
+## Fork Changes
+
+These changes are specific to this fork. They optimize the server for use by autonomous LLM agents that need to minimize token usage and find high-quality content.
+
+### 1. Engagement filtering on `search_tweets`
+
+The X API v2 has no `min_faves` operator. This fork adds **client-side engagement filtering** so low-engagement tweets never reach the LLM:
+
+```
+search_tweets query="AI safety -is:retweet" max_results=10 min_likes=20 min_retweets=5
+```
+
+When filters are set, the server fetches 100 results internally, filters by `public_metrics`, and returns up to `max_results`. The `includes.users` array is pruned to match.
+
+### 2. Relevancy sorting on `search_tweets`
+
+```
+search_tweets query="AI hallucination" sort_order="relevancy"
+```
+
+Default is `recency` (newest first). `relevancy` surfaces popular tweets first, which naturally pairs with `min_likes` filtering.
+
+### 3. Incremental polling via `since_id`
+
+Both `search_tweets` and `get_mentions` accept `since_id` — only returns results newer than the given tweet ID. For agents that poll periodically, this avoids re-processing old results and saves tokens.
+
+```
+get_mentions since_id="2025881827982876805"
+search_tweets query="@mybot" since_id="2025881827982876805"
+```
+
+### 4. Leaner responses
+
+- Stripped `profile_image_url` and `preview_image_url` from all responses (useless for LLMs, wastes tokens)
+- Removed media expansions from `search_tweets`, `get_tweet`, and `get_timeline` (media keys/URLs rarely needed for text-based agents)
+- Added `public_metrics` to user expansions in search results (so agents can see follower counts when evaluating reply targets)
 
 ---
 
