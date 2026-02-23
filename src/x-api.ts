@@ -1,7 +1,7 @@
 import crypto from "crypto";
 import OAuth from "oauth-1.0a";
 
-const API_BASE = "https://api.x.com/2";
+const DEFAULT_API_BASE = "https://api.x.com/2";
 const UPLOAD_BASE = "https://upload.twitter.com/1.1";
 
 interface RateLimitInfo {
@@ -27,15 +27,18 @@ export interface XApiConfig {
   accessToken: string;
   accessTokenSecret: string;
   bearerToken: string;
+  apiBase?: string; // default: "https://api.x.com/2"
 }
 
 export class XApiClient {
   private oauth: OAuth;
   private token: OAuth.Token;
   private bearerToken: string;
+  private apiBase: string;
   private authenticatedUserIdPromise: Promise<string> | null = null;
 
   constructor(private config: XApiConfig) {
+    this.apiBase = config.apiBase ?? DEFAULT_API_BASE;
     this.oauth = new OAuth({
       consumer: { key: config.apiKey, secret: config.apiSecret },
       signature_method: "HMAC-SHA1",
@@ -152,7 +155,7 @@ export class XApiClient {
   }
 
   private async fetchAuthenticatedUserId(): Promise<string> {
-    const url = `${API_BASE}/users/me`;
+    const url = `${this.apiBase}/users/me`;
     const response = await this.oauthFetch(url, "GET");
     const { result } = await this.handleResponse<XApiResponse<{ id: string }>>(response, "getAuthenticatedUser");
     if (!result.data?.id) {
@@ -189,12 +192,12 @@ export class XApiClient {
       body.media = { media_ids: params.media_ids };
     }
 
-    const response = await this.oauthFetch(`${API_BASE}/tweets`, "POST", body);
+    const response = await this.oauthFetch(`${this.apiBase}/tweets`, "POST", body);
     return this.handleResponse(response, "postTweet");
   }
 
   async deleteTweet(tweetId: string) {
-    const response = await this.oauthFetch(`${API_BASE}/tweets/${tweetId}`, "DELETE");
+    const response = await this.oauthFetch(`${this.apiBase}/tweets/${tweetId}`, "DELETE");
     return this.handleResponse(response, "deleteTweet");
   }
 
@@ -204,7 +207,7 @@ export class XApiClient {
       expansions: "author_id",
       "user.fields": "name,username,verified,public_metrics",
     });
-    const url = `${API_BASE}/tweets/${tweetId}?${params}`;
+    const url = `${this.apiBase}/tweets/${tweetId}?${params}`;
     const response = await this.bearerFetch(url);
     return this.handleResponse(response, "getTweet");
   }
@@ -230,7 +233,7 @@ export class XApiClient {
     if (filters?.sortOrder) params.set("sort_order", filters.sortOrder);
     if (filters?.sinceId) params.set("since_id", filters.sinceId);
 
-    const url = `${API_BASE}/tweets/search/recent?${params}`;
+    const url = `${this.apiBase}/tweets/search/recent?${params}`;
     const response = await this.bearerFetch(url);
     const { result, rateLimit } = await this.handleResponse<XApiResponse>(response, "searchTweets");
 
@@ -274,9 +277,9 @@ export class XApiClient {
 
     let url: string;
     if (params.username) {
-      url = `${API_BASE}/users/by/username/${params.username}?${fields}`;
+      url = `${this.apiBase}/users/by/username/${params.username}?${fields}`;
     } else if (params.userId) {
-      url = `${API_BASE}/users/${params.userId}?${fields}`;
+      url = `${this.apiBase}/users/${params.userId}?${fields}`;
     } else {
       throw new Error("Either username or userId must be provided");
     }
@@ -294,7 +297,7 @@ export class XApiClient {
     });
     if (nextToken) params.set("pagination_token", nextToken);
 
-    const url = `${API_BASE}/users/${userId}/tweets?${params}`;
+    const url = `${this.apiBase}/users/${userId}/tweets?${params}`;
     const response = await this.bearerFetch(url);
     return this.handleResponse(response, "getTimeline");
   }
@@ -310,7 +313,7 @@ export class XApiClient {
     if (nextToken) params.set("pagination_token", nextToken);
     if (sinceId) params.set("since_id", sinceId);
 
-    const url = `${API_BASE}/users/${userId}/mentions?${params}`;
+    const url = `${this.apiBase}/users/${userId}/mentions?${params}`;
     const response = await this.oauthFetch(url, "GET");
     return this.handleResponse(response, "getMentions");
   }
@@ -322,7 +325,7 @@ export class XApiClient {
     });
     if (nextToken) params.set("pagination_token", nextToken);
 
-    const url = `${API_BASE}/users/${userId}/followers?${params}`;
+    const url = `${this.apiBase}/users/${userId}/followers?${params}`;
     const response = await this.bearerFetch(url);
     return this.handleResponse(response, "getFollowers");
   }
@@ -334,7 +337,7 @@ export class XApiClient {
     });
     if (nextToken) params.set("pagination_token", nextToken);
 
-    const url = `${API_BASE}/users/${userId}/following?${params}`;
+    const url = `${this.apiBase}/users/${userId}/following?${params}`;
     const response = await this.bearerFetch(url);
     return this.handleResponse(response, "getFollowing");
   }
@@ -343,7 +346,7 @@ export class XApiClient {
 
   async likeTweet(tweetId: string) {
     const userId = await this.getAuthenticatedUserId();
-    const response = await this.oauthFetch(`${API_BASE}/users/${userId}/likes`, "POST", {
+    const response = await this.oauthFetch(`${this.apiBase}/users/${userId}/likes`, "POST", {
       tweet_id: tweetId,
     });
     return this.handleResponse(response, "likeTweet");
@@ -351,7 +354,7 @@ export class XApiClient {
 
   async retweet(tweetId: string) {
     const userId = await this.getAuthenticatedUserId();
-    const response = await this.oauthFetch(`${API_BASE}/users/${userId}/retweets`, "POST", {
+    const response = await this.oauthFetch(`${this.apiBase}/users/${userId}/retweets`, "POST", {
       tweet_id: tweetId,
     });
     return this.handleResponse(response, "retweet");
@@ -440,7 +443,7 @@ export class XApiClient {
     const params = new URLSearchParams({
       "tweet.fields": "public_metrics,non_public_metrics,organic_metrics",
     });
-    const url = `${API_BASE}/tweets/${tweetId}?${params}`;
+    const url = `${this.apiBase}/tweets/${tweetId}?${params}`;
     // Metrics require user context (OAuth 1.0a) for non_public_metrics
     const response = await this.oauthFetch(url, "GET");
     return this.handleResponse(response, "getTweetMetrics");

@@ -18,3 +18,24 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm test
+
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+      - run: go install github.com/xdevplatform/playground/cmd/playground@latest
+      - name: Start X API playground
+        run: |
+          playground start --port 8090 &
+          sleep 2
+          curl -sf http://localhost:8090/health
+      - run: npm ci
+      - run: npm run build
+      - run: npm run test:integration

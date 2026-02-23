@@ -1,0 +1,74 @@
+{
+  "_source": "Live X API response captured 2026-02-24. DO NOT EDIT — frozen fixture.",
+  "_endpoint": "GET /2/users/43859239/mentions?max_results=5&tweet.fields=created_at,public_metrics,author_id,conversation_id,entities,lang&expansions=author_id&user.fields=name,username,verified",
+  "data": [
+    {
+      "entities": {
+        "mentions": [
+          { "start": 0, "end": 14, "username": "JohannesHoppe", "id": "43859239" },
+          { "start": 15, "end": 23, "username": "angular", "id": "202230373" },
+          { "start": 24, "end": 37, "username": "angular_buch", "id": "842675227876319232" },
+          { "start": 38, "end": 49, "username": "fmalcher01", "id": "1979177082" }
+        ]
+      },
+      "author_id": "877708647706570753",
+      "text": "@JohannesHoppe @angular @angular_buch @fmalcher01 congrats man. great to see you launch the physical book after all that work.",
+      "lang": "en",
+      "public_metrics": {
+        "retweet_count": 0,
+        "reply_count": 1,
+        "like_count": 0,
+        "quote_count": 0,
+        "bookmark_count": 0,
+        "impression_count": 4
+      },
+      "conversation_id": "1623278568682790913",
+      "id": "2025938574135206063",
+      "created_at": "2026-02-23T14:19:30.000Z",
+      "edit_history_tweet_ids": ["2025938574135206063"]
+    },
+    {
+      "entities": {
+        "mentions": [
+          { "start": 0, "end": 14, "username": "JohannesHoppe", "id": "43859239" },
+          { "start": 15, "end": 23, "username": "angular", "id": "202230373" },
+          { "start": 24, "end": 37, "username": "angular_buch", "id": "842675227876319232" },
+          { "start": 38, "end": 53, "username": "angular_schule", "id": "857968017329840128" },
+          { "start": 54, "end": 68, "username": "AngularLovePL", "id": "1318157241179119616" }
+        ],
+        "annotations": [
+          { "start": 69, "end": 71, "probability": 0.68, "type": "Other", "normalized_text": "MCP" },
+          { "start": 134, "end": 140, "probability": 0.721, "type": "Other", "normalized_text": "Generic" },
+          { "start": 142, "end": 145, "probability": 0.5746, "type": "Other", "normalized_text": "LLMs" }
+        ]
+      },
+      "author_id": "129786608",
+      "text": "@JohannesHoppe @angular @angular_buch @angular_schule @AngularLovePL MCP servers are the missing piece for framework-specific agents. Generic LLMs hallucinate framework patterns constantly\u2014having Angular-aware tooling that enforces best practices at the agent level is huge.",
+      "lang": "en",
+      "public_metrics": {
+        "retweet_count": 0,
+        "reply_count": 0,
+        "like_count": 2,
+        "quote_count": 0,
+        "bookmark_count": 0,
+        "impression_count": 49
+      },
+      "conversation_id": "2021532465769144497",
+      "id": "2021543621389094962",
+      "created_at": "2026-02-11T11:15:32.000Z",
+      "edit_history_tweet_ids": ["2021543621389094962"]
+    }
+  ],
+  "includes": {
+    "users": [
+      { "verified": false, "name": "Sohom", "username": "ScalerSohom", "id": "877708647706570753" },
+      { "verified": false, "name": "Amey Pandit", "username": "panditamey1", "id": "129786608" }
+    ]
+  },
+  "meta": {
+    "result_count": 2,
+    "newest_id": "2025938574135206063",
+    "oldest_id": "2021543621389094962",
+    "next_token": "7140dibdnow9c7btwoxgu72kgfgrh27o1krdv3yxiw3lc"
+  }
+}
