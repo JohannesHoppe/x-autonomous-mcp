@@ -73,9 +73,7 @@ describe("formatResult", () => {
     expect(result).not.toHaveProperty("budget");
   });
 
-  it("compacts tweet response when compact=true", () => {
-    // formatResult wraps in { data: ... }, and the API response itself has data/includes
-    // So the output is { data: { data: compactTweet } }
+  it("compacts tweet response when compact=true (no double data wrapping)", () => {
     const apiResponse = {
       data: {
         id: "123",
@@ -90,12 +88,11 @@ describe("formatResult", () => {
       },
     };
     const result = JSON.parse(formatResult(apiResponse, "", undefined, true));
-    // compactResponse transforms { data: tweet, includes } → { data: compactTweet }
-    // then formatResult wraps that in { data: ... }
-    expect(result.data.data.author).toBe("@author");
-    expect(result.data.data.likes).toBe(5);
-    expect(result.data.data).not.toHaveProperty("entities");
-    expect(result.data).not.toHaveProperty("includes");
+    // compactResponse merges directly — { data: compactTweet, budget: ... }
+    expect(result.data.author).toBe("@author");
+    expect(result.data.likes).toBe(5);
+    expect(result.data).not.toHaveProperty("entities");
+    expect(result).not.toHaveProperty("includes");
   });
 
   it("does not compact when compact=false", () => {
@@ -108,7 +105,22 @@ describe("formatResult", () => {
       },
     };
     const result = JSON.parse(formatResult(apiResponse, "", undefined, false));
-    // No compaction: formatResult wraps the raw API response as-is
+    // Non-compact: wraps raw API response in MCP envelope { data: <raw> }
     expect(result.data.data.entities).toBeDefined();
+  });
+
+  it("preserves meta in compact mode", () => {
+    const apiResponse = {
+      data: [
+        { id: "1", text: "First", author_id: "10", public_metrics: { like_count: 1, retweet_count: 0, reply_count: 0 }, created_at: "2026-02-23T13:00:00.000Z" },
+      ],
+      includes: { users: [{ id: "10", username: "u", name: "U" }] },
+      meta: { result_count: 1, next_token: "abc" },
+    };
+    const result = JSON.parse(formatResult(apiResponse, "", "3/8 replies", true));
+    expect(result.meta).toEqual({ result_count: 1, next_token: "abc" });
+    expect(result.budget).toBe("3/8 replies");
+    expect(result.data).toHaveLength(1);
+    expect(result.data[0].author).toBe("@u");
   });
 });

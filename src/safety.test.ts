@@ -6,6 +6,7 @@ import {
   checkDedup,
   recordAction,
   getParameterHint,
+  isWriteTool,
 } from "./safety.js";
 import type { BudgetConfig } from "./safety.js";
 import { getDefaultState } from "./state.js";
@@ -295,5 +296,35 @@ describe("getParameterHint", () => {
   it("returns null for tools not in hint map", () => {
     expect(getParameterHint("get_tweet", "reply_to_tweet_id")).toBeNull();
     expect(getParameterHint("like_tweet", "reply_to_tweet_id")).toBeNull();
+  });
+});
+
+describe("isWriteTool", () => {
+  it("returns true for write tools", () => {
+    expect(isWriteTool("post_tweet")).toBe(true);
+    expect(isWriteTool("reply_to_tweet")).toBe(true);
+    expect(isWriteTool("quote_tweet")).toBe(true);
+    expect(isWriteTool("like_tweet")).toBe(true);
+    expect(isWriteTool("retweet")).toBe(true);
+  });
+
+  it("returns false for read-only tools", () => {
+    expect(isWriteTool("get_tweet")).toBe(false);
+    expect(isWriteTool("search_tweets")).toBe(false);
+    expect(isWriteTool("get_user")).toBe(false);
+    expect(isWriteTool("get_timeline")).toBe(false);
+    expect(isWriteTool("get_mentions")).toBe(false);
+    expect(isWriteTool("get_followers")).toBe(false);
+    expect(isWriteTool("get_following")).toBe(false);
+    expect(isWriteTool("upload_media")).toBe(false);
+    expect(isWriteTool("get_metrics")).toBe(false);
+  });
+
+  it("returns false for delete_tweet (no budget action)", () => {
+    expect(isWriteTool("delete_tweet")).toBe(false);
+  });
+
+  it("returns false for unknown tools", () => {
+    expect(isWriteTool("nonexistent_tool")).toBe(false);
   });
 });

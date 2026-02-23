@@ -1,3 +1,5 @@
+import { compactResponse } from "./compact.js";
+
 /**
  * Extract tweet ID from a URL or raw numeric ID string.
  */
@@ -18,10 +20,13 @@ export function errorMessage(e: unknown): string {
   return String(e);
 }
 
-import { compactResponse } from "./compact.js";
-
 /**
  * Format API result and rate limit info as a JSON string for MCP responses.
+ *
+ * In compact mode, compactResponse preserves the API's { data, meta } shape,
+ * so we merge rate_limit/budget into that structure directly — no extra wrapper.
+ * In non-compact mode, we wrap the raw API response in { data: ... } as an
+ * MCP envelope.
  */
 export function formatResult(
   data: unknown,
@@ -29,11 +34,21 @@ export function formatResult(
   budgetString?: string,
   compact?: boolean,
 ): string {
-  let processedData = data;
+  let output: Record<string, unknown>;
+
   if (compact && data && typeof data === "object") {
-    processedData = compactResponse(data);
+    const compacted = compactResponse(data);
+    if (compacted && typeof compacted === "object") {
+      // compactResponse returns { data: compactTweet/User, meta?: ... } or passthrough
+      // Merge budget/rate_limit alongside data/meta — no extra wrapping
+      output = { ...(compacted as Record<string, unknown>) };
+    } else {
+      output = { data: compacted };
+    }
+  } else {
+    output = { data };
   }
-  const output: Record<string, unknown> = { data: processedData };
+
   if (rateLimit) output.rate_limit = rateLimit;
   if (budgetString) output.budget = budgetString;
   return JSON.stringify(output, null, 2);

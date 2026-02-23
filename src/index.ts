@@ -16,6 +16,7 @@ import {
   checkDedup,
   recordAction,
   getParameterHint,
+  isWriteTool,
 } from "./safety.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -49,7 +50,7 @@ const dedupEnabled = process.env.X_MCP_DEDUP !== "false"; // default true
 
 const server = new McpServer({
   name: "x-autonomous-mcp",
-  version: "1.0.0",
+  version: "0.1.0",
 });
 
 // --- Handler wrapper ---
@@ -67,7 +68,7 @@ type ToolResult = {
 
 function wrapHandler(
   toolName: string,
-  handler: (args: Record<string, unknown>) => Promise<{ result: unknown; rateLimit: string }>,
+  handler: (args: Record<string, unknown>, resolvedTargetId?: string) => Promise<{ result: unknown; rateLimit: string }>,
   opts?: WrapOptions,
 ): (args: Record<string, unknown>) => Promise<ToolResult> {
   return async (args) => {
@@ -84,7 +85,7 @@ function wrapHandler(
         };
       }
 
-      // Dedup check (engagement tools only)
+      // Dedup check (engagement tools only) — also resolves tweet ID once
       const targetId = opts?.getTargetTweetId?.(args);
       if (dedupEnabled && targetId) {
         const dedupError = checkDedup(toolName, targetId, state);
@@ -97,15 +98,17 @@ function wrapHandler(
         }
       }
 
-      // Execute the actual API call
-      const { result, rateLimit } = await handler(args);
+      // Execute the actual API call, passing resolved ID to avoid re-parsing
+      const { result, rateLimit } = await handler(args, targetId);
 
-      // Record action and save state (for write tools)
-      const updatedState = recordAction(toolName, targetId ?? null, state);
-      saveState(statePath, updatedState);
+      // Record action and save state only for write tools
+      if (isWriteTool(toolName)) {
+        recordAction(toolName, targetId ?? null, state);
+        saveState(statePath, state);
+      }
 
       // Format response with budget string and compact mode
-      const budgetString = formatBudgetString(updatedState, budgetConfig);
+      const budgetString = formatBudgetString(state, budgetConfig);
       return {
         content: [{ type: "text", text: formatResult(result, rateLimit, budgetString, compactMode) }],
       };
@@ -157,8 +160,10 @@ server.registerTool(
           return hint ? `Unknown parameter '${k}': ${hint}` : `Unknown parameter '${k}'.`;
         })
         .join("\n");
+      const state = loadState(statePath);
+      const budgetString = formatBudgetString(state, budgetConfig);
       return {
-        content: [{ type: "text", text: `Error: ${hints}\n\nValid parameters for post_tweet: ${POST_TWEET_VALID_KEYS.join(", ")}` }],
+        content: [{ type: "text", text: `Error: ${hints}\n\nValid parameters for post_tweet: ${POST_TWEET_VALID_KEYS.join(", ")}\n\nCurrent budget: ${budgetString}` }],
         isError: true,
       };
     }
@@ -184,11 +189,10 @@ server.registerTool(
       media_ids: z.array(z.string()).optional().describe("Media IDs to attach"),
     }).strict(),
   },
-  wrapHandler("reply_to_tweet", async (args) => {
-    const id = parseTweetId(args.tweet_id as string);
+  wrapHandler("reply_to_tweet", async (args, resolvedId) => {
     return client.postTweet({
       text: args.text as string,
-      reply_to: id,
+      reply_to: resolvedId!,
       media_ids: args.media_ids as string[] | undefined,
     });
   }, { getTargetTweetId: (args) => parseTweetId(args.tweet_id as string) }),
@@ -204,11 +208,10 @@ server.registerTool(
       media_ids: z.array(z.string()).optional().describe("Media IDs to attach"),
     }).strict(),
   },
-  wrapHandler("quote_tweet", async (args) => {
-    const id = parseTweetId(args.tweet_id as string);
+  wrapHandler("quote_tweet", async (args, resolvedId) => {
     return client.postTweet({
       text: args.text as string,
-      quote_tweet_id: id,
+      quote_tweet_id: resolvedId!,
       media_ids: args.media_ids as string[] | undefined,
     });
   }, { getTargetTweetId: (args) => parseTweetId(args.tweet_id as string) }),
@@ -290,7 +293,9 @@ server.registerTool(
   },
   async (args) => {
     if (!args.username && !args.user_id) {
-      return { content: [{ type: "text" as const, text: "Error: Provide either username or user_id" }], isError: true };
+      const state = loadState(statePath);
+      const budgetString = formatBudgetString(state, budgetConfig);
+      return { content: [{ type: "text" as const, text: `Error: Provide either username or user_id\n\nCurrent budget: ${budgetString}` }], isError: true };
     }
     return wrapHandler("get_user", async (a) => {
       return client.getUser({
@@ -389,9 +394,8 @@ server.registerTool(
       tweet_id: z.string().describe("The tweet ID or URL to like"),
     }).strict(),
   },
-  wrapHandler("like_tweet", async (args) => {
-    const id = parseTweetId(args.tweet_id as string);
-    return client.likeTweet(id);
+  wrapHandler("like_tweet", async (_args, resolvedId) => {
+    return client.likeTweet(resolvedId!);
   }, { getTargetTweetId: (args) => parseTweetId(args.tweet_id as string) }),
 );
 
@@ -403,9 +407,8 @@ server.registerTool(
       tweet_id: z.string().describe("The tweet ID or URL to retweet"),
     }).strict(),
   },
-  wrapHandler("retweet", async (args) => {
-    const id = parseTweetId(args.tweet_id as string);
-    return client.retweet(id);
+  wrapHandler("retweet", async (_args, resolvedId) => {
+    return client.retweet(resolvedId!);
   }, { getTargetTweetId: (args) => parseTweetId(args.tweet_id as string) }),
 );
 

@@ -170,13 +170,19 @@ export function checkDedup(
   return null;
 }
 
-// --- Record action ---
+// --- Write tool check ---
+
+export function isWriteTool(toolName: string): boolean {
+  return (ACTION_MAP[toolName] ?? null) !== null;
+}
+
+// --- Record action (mutates state in-place) ---
 
 export function recordAction(
   toolName: string,
   targetTweetId: string | null,
   state: StateFile,
-): StateFile {
+): void {
   const action = ACTION_MAP[toolName] ?? null;
   const now = new Date().toISOString();
 
@@ -196,8 +202,6 @@ export function recordAction(
   if (dedupType && targetTweetId) {
     state.engaged[dedupType].push({ tweet_id: targetTweetId, at: now });
   }
-
-  return state;
 }
 
 // --- Self-describing error hints ---
