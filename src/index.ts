@@ -163,15 +163,20 @@ server.tool(
 
 server.tool(
   "search_tweets",
-  "Search recent tweets by query. Supports keywords, hashtags, from:user, to:user, is:reply, has:media, etc. Uses the recent search endpoint (last 7 days).",
+  "Search recent tweets by query. Supports keywords, hashtags, from:user, to:user, is:reply, has:media, etc. Uses the recent search endpoint (last 7 days). Use min_likes/min_retweets to filter for high-engagement tweets only.",
   {
     query: z.string().describe("Search query (e.g. 'from:elonmusk', '#ai', 'machine learning')"),
-    max_results: z.number().optional().describe("Number of results (10-100, default 10)"),
+    max_results: z.number().optional().describe("Number of results to return (10-100, default 10)"),
+    min_likes: z.number().optional().describe("Only return tweets with at least this many likes"),
+    min_retweets: z.number().optional().describe("Only return tweets with at least this many retweets"),
     next_token: z.string().optional().describe("Pagination token from previous response"),
   },
-  async ({ query, max_results, next_token }) => {
+  async ({ query, max_results, min_likes, min_retweets, next_token }) => {
     try {
-      const { result, rateLimit } = await client.searchTweets(query, max_results, next_token);
+      const { result, rateLimit } = await client.searchTweets(query, max_results, next_token, {
+        minLikes: min_likes,
+        minRetweets: min_retweets,
+      });
       return { content: [{ type: "text", text: formatResult(result, rateLimit) }] };
     } catch (e: unknown) {
       return { content: [{ type: "text", text: `Error: ${(e as Error).message}` }], isError: true };

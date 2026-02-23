@@ -202,10 +202,19 @@ export class XApiClient {
     return this.handleResponse(response, "getTweet");
   }
 
-  async searchTweets(query: string, maxResults: number = 10, nextToken?: string) {
+  async searchTweets(
+    query: string,
+    maxResults: number = 10,
+    nextToken?: string,
+    filters?: { minLikes?: number; minRetweets?: number },
+  ) {
+    const hasFilters = filters && (filters.minLikes || filters.minRetweets);
+    // When filtering, fetch max results to have enough after filtering
+    const fetchCount = hasFilters ? 100 : Math.min(Math.max(maxResults, 10), 100);
+
     const params = new URLSearchParams({
       query,
-      max_results: Math.min(Math.max(maxResults, 10), 100).toString(),
+      max_results: fetchCount.toString(),
       "tweet.fields": "created_at,public_metrics,author_id,conversation_id,entities,lang",
       expansions: "author_id,attachments.media_keys",
       "user.fields": "name,username,verified,profile_image_url",
@@ -215,7 +224,37 @@ export class XApiClient {
 
     const url = `${API_BASE}/tweets/search/recent?${params}`;
     const response = await this.bearerFetch(url);
-    return this.handleResponse(response, "searchTweets");
+    const { result, rateLimit } = await this.handleResponse<XApiResponse>(response, "searchTweets");
+
+    // Apply engagement filters client-side
+    if (hasFilters && result.data && Array.isArray(result.data)) {
+      const minLikes = filters.minLikes || 0;
+      const minRetweets = filters.minRetweets || 0;
+
+      const filtered = (result.data as Array<Record<string, unknown>>).filter((tweet) => {
+        const metrics = tweet.public_metrics as { like_count?: number; retweet_count?: number } | undefined;
+        if (!metrics) return false;
+        return (metrics.like_count || 0) >= minLikes && (metrics.retweet_count || 0) >= minRetweets;
+      });
+
+      // Trim to requested count
+      const trimmed = filtered.slice(0, Math.min(Math.max(maxResults, 10), 100));
+
+      // Filter includes.users to only keep authors of surviving tweets
+      const authorIds = new Set(trimmed.map((t) => t.author_id));
+      if (result.includes && Array.isArray((result.includes as Record<string, unknown[]>).users)) {
+        (result.includes as Record<string, unknown[]>).users = (
+          (result.includes as Record<string, unknown[]>).users as Array<Record<string, unknown>>
+        ).filter((u) => authorIds.has(u.id));
+      }
+
+      result.data = trimmed as typeof result.data;
+      if (result.meta) {
+        result.meta.result_count = trimmed.length;
+      }
+    }
+
+    return { result, rateLimit };
   }
 
   // --- User operations ---
