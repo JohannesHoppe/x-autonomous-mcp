@@ -33,7 +33,7 @@ export class XApiClient {
   private oauth: OAuth;
   private token: OAuth.Token;
   private bearerToken: string;
-  private authenticatedUserId: string | null = null;
+  private authenticatedUserIdPromise: Promise<string> | null = null;
 
   constructor(private config: XApiConfig) {
     this.oauth = new OAuth({
@@ -133,9 +133,9 @@ export class XApiClient {
 
     if (!response.ok) {
       const errorBody = data as unknown as XApiResponse;
-      const errorMsg = errorBody.errors
-        ?.map((e) => e.detail || e.message)
-        .join("; ") || text.slice(0, 500);
+      const errorMsg = (Array.isArray(errorBody.errors)
+        ? errorBody.errors.map((e) => e.detail || e.message).join("; ")
+        : "") || text.slice(0, 500);
       throw new Error(
         `${operation} failed (HTTP ${response.status}): ${errorMsg}. ${rateLimitStr}`,
       );
@@ -145,12 +145,20 @@ export class XApiClient {
   }
 
   async getAuthenticatedUserId(): Promise<string> {
-    if (this.authenticatedUserId) return this.authenticatedUserId;
+    if (!this.authenticatedUserIdPromise) {
+      this.authenticatedUserIdPromise = this.fetchAuthenticatedUserId();
+    }
+    return this.authenticatedUserIdPromise;
+  }
+
+  private async fetchAuthenticatedUserId(): Promise<string> {
     const url = `${API_BASE}/users/me`;
     const response = await this.oauthFetch(url, "GET");
     const { result } = await this.handleResponse<XApiResponse<{ id: string }>>(response, "getAuthenticatedUser");
-    this.authenticatedUserId = result.data!.id;
-    return this.authenticatedUserId;
+    if (!result.data?.id) {
+      throw new Error("getAuthenticatedUser: API returned no user data");
+    }
+    return result.data.id;
   }
 
   // --- Tweet operations ---
@@ -193,7 +201,7 @@ export class XApiClient {
   async getTweet(tweetId: string) {
     const params = new URLSearchParams({
       "tweet.fields": "created_at,public_metrics,author_id,conversation_id,in_reply_to_user_id,referenced_tweets,entities,lang",
-      expansions: "author_id,referenced_tweets.id",
+      expansions: "author_id",
       "user.fields": "name,username,verified,public_metrics",
     });
     const url = `${API_BASE}/tweets/${tweetId}?${params}`;
@@ -261,7 +269,7 @@ export class XApiClient {
 
   async getUser(params: { username?: string; userId?: string }) {
     const fields = new URLSearchParams({
-      "user.fields": "created_at,description,public_metrics,verified,profile_image_url,url,location,pinned_tweet_id",
+      "user.fields": "created_at,description,public_metrics,verified,url,location,pinned_tweet_id",
     });
 
     let url: string;
@@ -281,7 +289,7 @@ export class XApiClient {
     const params = new URLSearchParams({
       max_results: Math.min(Math.max(maxResults, 5), 100).toString(),
       "tweet.fields": "created_at,public_metrics,author_id,conversation_id,entities,lang",
-      expansions: "author_id,referenced_tweets.id",
+      expansions: "author_id",
       "user.fields": "name,username,verified",
     });
     if (nextToken) params.set("pagination_token", nextToken);
@@ -310,7 +318,7 @@ export class XApiClient {
   async getFollowers(userId: string, maxResults: number = 100, nextToken?: string) {
     const params = new URLSearchParams({
       max_results: Math.min(Math.max(maxResults, 1), 1000).toString(),
-      "user.fields": "created_at,description,public_metrics,verified,profile_image_url",
+      "user.fields": "created_at,description,public_metrics,verified",
     });
     if (nextToken) params.set("pagination_token", nextToken);
 
@@ -322,7 +330,7 @@ export class XApiClient {
   async getFollowing(userId: string, maxResults: number = 100, nextToken?: string) {
     const params = new URLSearchParams({
       max_results: Math.min(Math.max(maxResults, 1), 1000).toString(),
-      "user.fields": "created_at,description,public_metrics,verified,profile_image_url",
+      "user.fields": "created_at,description,public_metrics,verified",
     });
     if (nextToken) params.set("pagination_token", nextToken);
 

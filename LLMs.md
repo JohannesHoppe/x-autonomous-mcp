@@ -21,7 +21,7 @@ x-mcp is an MCP (Model Context Protocol) server that connects AI agents to the X
 Run these commands:
 
 ```bash
-git clone https://github.com/INFATOSHI/x-mcp.git
+git clone https://github.com/JohannesHoppe/x-mcp.git
 cd x-mcp
 npm install
 npm run build

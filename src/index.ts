@@ -7,6 +7,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { z } from "zod";
 import { XApiClient } from "./x-api.js";
+import { parseTweetId, errorMessage, formatResult } from "./helpers.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, "..", ".env") });
@@ -32,41 +33,6 @@ const server = new McpServer({
   version: "1.0.0",
 });
 
-// --- Helper to extract tweet ID from URL or raw ID ---
-function parseTweetId(input: string): string {
-  // Handle URLs like https://x.com/user/status/123456 or https://twitter.com/user/status/123456
-  const match = input.match(/(?:twitter\.com|x\.com)\/\w+\/status\/(\d+)/);
-  if (match) return match[1];
-  // Otherwise treat as raw ID
-  const stripped = input.trim();
-  if (/^\d+$/.test(stripped)) return stripped;
-  throw new Error(`Invalid tweet ID or URL: ${input}`);
-}
-
-// Fields that waste tokens without adding value for LLM consumers
-const STRIP_FIELDS = new Set(["profile_image_url", "preview_image_url"]);
-
-function stripBloat(obj: unknown): unknown {
-  if (Array.isArray(obj)) return obj.map(stripBloat);
-  if (obj && typeof obj === "object") {
-    const cleaned: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
-      if (!STRIP_FIELDS.has(key)) {
-        cleaned[key] = stripBloat(value);
-      }
-    }
-    return cleaned;
-  }
-  return obj;
-}
-
-function formatResult(data: unknown, rateLimit: string): string {
-  const cleaned = stripBloat(data);
-  const output: Record<string, unknown> = { data: cleaned };
-  if (rateLimit) output.rate_limit = rateLimit;
-  return JSON.stringify(output, null, 2);
-}
-
 // ============================================================
 // TWEET TOOLS
 // All tools use .strict() schemas — unknown parameters cause
@@ -78,9 +44,9 @@ server.registerTool(
   {
     description: "Create a new post on X (Twitter). Supports text, polls, and media attachments. To REPLY to a tweet, use reply_to_tweet instead.",
     inputSchema: z.object({
-      text: z.string().describe("The text content of the tweet (max 280 characters)"),
-      poll_options: z.array(z.string()).optional().describe("Poll options (2-4 choices)"),
-      poll_duration_minutes: z.number().optional().describe("Poll duration in minutes (default 1440 = 24h)"),
+      text: z.string().describe("The text content of the tweet"),
+      poll_options: z.array(z.string()).min(2).max(4).optional().describe("Poll options (2-4 choices)"),
+      poll_duration_minutes: z.number().int().min(1).max(10080).optional().describe("Poll duration in minutes (1-10080, default 1440 = 24h)"),
       media_ids: z.array(z.string()).optional().describe("Media IDs to attach (from upload_media)"),
     }).strict(),
   },
@@ -94,7 +60,7 @@ server.registerTool(
       });
       return { content: [{ type: "text", text: formatResult(result, rateLimit) }] };
     } catch (e: unknown) {
-      return { content: [{ type: "text", text: `Error: ${(e as Error).message}` }], isError: true };
+      return { content: [{ type: "text", text: `Error: ${errorMessage(e)}` }], isError: true };
     }
   },
 );
@@ -119,7 +85,7 @@ server.registerTool(
       });
       return { content: [{ type: "text", text: formatResult(result, rateLimit) }] };
     } catch (e: unknown) {
-      return { content: [{ type: "text", text: `Error: ${(e as Error).message}` }], isError: true };
+      return { content: [{ type: "text", text: `Error: ${errorMessage(e)}` }], isError: true };
     }
   },
 );
@@ -144,7 +110,7 @@ server.registerTool(
       });
       return { content: [{ type: "text", text: formatResult(result, rateLimit) }] };
     } catch (e: unknown) {
-      return { content: [{ type: "text", text: `Error: ${(e as Error).message}` }], isError: true };
+      return { content: [{ type: "text", text: `Error: ${errorMessage(e)}` }], isError: true };
     }
   },
 );
@@ -163,7 +129,7 @@ server.registerTool(
       const { result, rateLimit } = await client.deleteTweet(id);
       return { content: [{ type: "text", text: formatResult(result, rateLimit) }] };
     } catch (e: unknown) {
-      return { content: [{ type: "text", text: `Error: ${(e as Error).message}` }], isError: true };
+      return { content: [{ type: "text", text: `Error: ${errorMessage(e)}` }], isError: true };
     }
   },
 );
@@ -182,7 +148,7 @@ server.registerTool(
       const { result, rateLimit } = await client.getTweet(id);
       return { content: [{ type: "text", text: formatResult(result, rateLimit) }] };
     } catch (e: unknown) {
-      return { content: [{ type: "text", text: `Error: ${(e as Error).message}` }], isError: true };
+      return { content: [{ type: "text", text: `Error: ${errorMessage(e)}` }], isError: true };
     }
   },
 );
@@ -215,7 +181,7 @@ server.registerTool(
       });
       return { content: [{ type: "text", text: formatResult(result, rateLimit) }] };
     } catch (e: unknown) {
-      return { content: [{ type: "text", text: `Error: ${(e as Error).message}` }], isError: true };
+      return { content: [{ type: "text", text: `Error: ${errorMessage(e)}` }], isError: true };
     }
   },
 );
@@ -241,7 +207,7 @@ server.registerTool(
       const { result, rateLimit } = await client.getUser({ username, userId: user_id });
       return { content: [{ type: "text", text: formatResult(result, rateLimit) }] };
     } catch (e: unknown) {
-      return { content: [{ type: "text", text: `Error: ${(e as Error).message}` }], isError: true };
+      return { content: [{ type: "text", text: `Error: ${errorMessage(e)}` }], isError: true };
     }
   },
 );
@@ -261,7 +227,7 @@ server.registerTool(
       const { result, rateLimit } = await client.getTimeline(user_id, max_results, next_token);
       return { content: [{ type: "text", text: formatResult(result, rateLimit) }] };
     } catch (e: unknown) {
-      return { content: [{ type: "text", text: `Error: ${(e as Error).message}` }], isError: true };
+      return { content: [{ type: "text", text: `Error: ${errorMessage(e)}` }], isError: true };
     }
   },
 );
@@ -281,7 +247,7 @@ server.registerTool(
       const { result, rateLimit } = await client.getMentions(max_results, next_token, since_id);
       return { content: [{ type: "text", text: formatResult(result, rateLimit) }] };
     } catch (e: unknown) {
-      return { content: [{ type: "text", text: `Error: ${(e as Error).message}` }], isError: true };
+      return { content: [{ type: "text", text: `Error: ${errorMessage(e)}` }], isError: true };
     }
   },
 );
@@ -301,7 +267,7 @@ server.registerTool(
       const { result, rateLimit } = await client.getFollowers(user_id, max_results, next_token);
       return { content: [{ type: "text", text: formatResult(result, rateLimit) }] };
     } catch (e: unknown) {
-      return { content: [{ type: "text", text: `Error: ${(e as Error).message}` }], isError: true };
+      return { content: [{ type: "text", text: `Error: ${errorMessage(e)}` }], isError: true };
     }
   },
 );
@@ -321,7 +287,7 @@ server.registerTool(
       const { result, rateLimit } = await client.getFollowing(user_id, max_results, next_token);
       return { content: [{ type: "text", text: formatResult(result, rateLimit) }] };
     } catch (e: unknown) {
-      return { content: [{ type: "text", text: `Error: ${(e as Error).message}` }], isError: true };
+      return { content: [{ type: "text", text: `Error: ${errorMessage(e)}` }], isError: true };
     }
   },
 );
@@ -344,7 +310,7 @@ server.registerTool(
       const { result, rateLimit } = await client.likeTweet(id);
       return { content: [{ type: "text", text: formatResult(result, rateLimit) }] };
     } catch (e: unknown) {
-      return { content: [{ type: "text", text: `Error: ${(e as Error).message}` }], isError: true };
+      return { content: [{ type: "text", text: `Error: ${errorMessage(e)}` }], isError: true };
     }
   },
 );
@@ -363,7 +329,7 @@ server.registerTool(
       const { result, rateLimit } = await client.retweet(id);
       return { content: [{ type: "text", text: formatResult(result, rateLimit) }] };
     } catch (e: unknown) {
-      return { content: [{ type: "text", text: `Error: ${(e as Error).message}` }], isError: true };
+      return { content: [{ type: "text", text: `Error: ${errorMessage(e)}` }], isError: true };
     }
   },
 );
@@ -396,7 +362,7 @@ server.registerTool(
         }],
       };
     } catch (e: unknown) {
-      return { content: [{ type: "text", text: `Error: ${(e as Error).message}` }], isError: true };
+      return { content: [{ type: "text", text: `Error: ${errorMessage(e)}` }], isError: true };
     }
   },
 );
@@ -419,7 +385,7 @@ server.registerTool(
       const { result, rateLimit } = await client.getTweetMetrics(id);
       return { content: [{ type: "text", text: formatResult(result, rateLimit) }] };
     } catch (e: unknown) {
-      return { content: [{ type: "text", text: `Error: ${(e as Error).message}` }], isError: true };
+      return { content: [{ type: "text", text: `Error: ${errorMessage(e)}` }], isError: true };
     }
   },
 );

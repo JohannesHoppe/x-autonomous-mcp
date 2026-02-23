@@ -1,8 +1,6 @@
 # x-mcp
 
-Fork of [Infatoshi/x-mcp](https://github.com/Infatoshi/x-mcp) with improvements for autonomous AI agents: engagement filtering, relevancy sorting, incremental polling, and leaner responses to save LLM tokens.
-
-An MCP (Model Context Protocol) server that gives AI agents full access to the X (Twitter) API. Post tweets, search, read timelines, like, retweet, upload media -- all through natural language.
+An MCP (Model Context Protocol) server that gives AI agents full access to the X (Twitter) API. Post tweets, search, read timelines, like, retweet, upload media -- all through natural language. Optimized for autonomous LLM agents with engagement filtering, relevancy sorting, incremental polling, strict schema validation, and lean responses.
 
 Works with **Claude Code**, **Claude Desktop**, **OpenAI Codex**, **Cursor**, **Windsurf**, **Cline**, and any other MCP-compatible client.
 
@@ -10,13 +8,11 @@ Works with **Claude Code**, **Claude Desktop**, **OpenAI Codex**, **Cursor**, **
 
 ---
 
-## Fork Changes
+## Features
 
-These changes are specific to this fork. They optimize the server for use by autonomous LLM agents that need to minimize token usage and find high-quality content.
+### Engagement filtering on `search_tweets`
 
-### 1. Engagement filtering on `search_tweets`
-
-The X API v2 has no `min_faves` operator. This fork adds **client-side engagement filtering** so low-engagement tweets never reach the LLM:
+The X API v2 has no `min_faves` operator. x-mcp adds **client-side engagement filtering** so low-engagement tweets never reach the LLM:
 
 ```
 search_tweets query="AI safety -is:retweet" max_results=10 min_likes=20 min_retweets=5
@@ -24,7 +20,7 @@ search_tweets query="AI safety -is:retweet" max_results=10 min_likes=20 min_retw
 
 When filters are set, the server fetches 100 results internally, filters by `public_metrics`, and returns up to `max_results`. The `includes.users` array is pruned to match.
 
-### 2. Relevancy sorting on `search_tweets`
+### Relevancy sorting on `search_tweets`
 
 ```
 search_tweets query="AI hallucination" sort_order="relevancy"
@@ -32,7 +28,7 @@ search_tweets query="AI hallucination" sort_order="relevancy"
 
 Default is `recency` (newest first). `relevancy` surfaces popular tweets first, which naturally pairs with `min_likes` filtering.
 
-### 3. Incremental polling via `since_id`
+### Incremental polling via `since_id`
 
 Both `search_tweets` and `get_mentions` accept `since_id` — only returns results newer than the given tweet ID. For agents that poll periodically, this avoids re-processing old results and saves tokens.
 
@@ -41,11 +37,14 @@ get_mentions since_id="2025881827982876805"
 search_tweets query="@mybot" since_id="2025881827982876805"
 ```
 
-### 4. Leaner responses
+### Lean responses
 
-- Stripped `profile_image_url` and `preview_image_url` from all responses (useless for LLMs, wastes tokens)
-- Removed media expansions from `search_tweets`, `get_tweet`, and `get_timeline` (media keys/URLs rarely needed for text-based agents)
-- Added `public_metrics` to user expansions in search results (so agents can see follower counts when evaluating reply targets)
+- Omits `profile_image_url` and media expansions from API requests (useless for LLMs, wastes tokens)
+- Includes `public_metrics` in user expansions for search results (so agents can see follower counts when evaluating reply targets)
+
+### Strict schema validation
+
+All 16 tools use `.strict()` Zod schemas. If an LLM hallucinates a parameter name (e.g., `reply_to_tweet_id` instead of using the `reply_to_tweet` tool), the server returns a clear validation error instead of silently ignoring the parameter.
 
 ---
 
@@ -69,7 +68,7 @@ Accepts tweet URLs or IDs interchangeably -- paste `https://x.com/user/status/12
 ### 1. Clone and build
 
 ```bash
-git clone https://github.com/INFATOSHI/x-mcp.git
+git clone https://github.com/JohannesHoppe/x-mcp.git
 cd x-mcp
 npm install
 npm run build
@@ -318,6 +317,10 @@ The `search_tweets` tool supports X's full query language:
 - Combine with spaces (AND) or `OR`
 
 ---
+
+## Credits
+
+Based on [Infatoshi/x-mcp](https://github.com/Infatoshi/x-mcp) by [@Infatoshi](https://github.com/Infatoshi).
 
 ## License
 
