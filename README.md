@@ -66,9 +66,17 @@ When the LLM hallucinates a parameter on `post_tweet`, the error tells it what t
 Unknown parameter 'reply_to_tweet_id': Use the 'reply_to_tweet' tool instead.
 ```
 
+### Destructive tool gating (default off)
+
+Destructive operations like `delete_tweet` are **completely hidden** from the LLM unless explicitly enabled. The tool doesn't show up in the tool list at all — the LLM can't even attempt to call it.
+
+```
+X_MCP_ENABLE_DANGEROUS=true   # Off by default. Set to enable delete_tweet.
+```
+
 ### Strict schema validation
 
-All 16 tools use `.strict()` Zod schemas. Unknown parameters cause a validation error instead of being silently stripped.
+All tools use `.strict()` Zod schemas. Unknown parameters cause a validation error instead of being silently stripped.
 
 ---
 
@@ -101,6 +109,16 @@ get_mentions since_id="2025881827982876805"
 search_tweets query="@mybot" since_id="2025881827982876805"
 ```
 
+### Username or ID — everywhere
+
+All user-related tools (`get_timeline`, `get_followers`, `get_following`) accept either a `@username`, a plain username, or a numeric user ID. No more two-step "look up user first, then get timeline" dance. The server resolves it automatically.
+
+```
+get_timeline user="@JohannesHoppe"
+get_timeline user="JohannesHoppe"
+get_timeline user="43859239"
+```
+
 ### Lean responses
 
 - Omits `profile_image_url` and media expansions from API requests (useless for LLMs, wastes tokens)
@@ -112,14 +130,16 @@ search_tweets query="@mybot" since_id="2025881827982876805"
 
 | Category | Tools | What You Can Say |
 |----------|-------|------------------|
-| **Post** | `post_tweet`, `reply_to_tweet`, `quote_tweet`, `delete_tweet` | "Post 'hello world' on X" / "Reply to this tweet saying thanks" |
-| **Read** | `get_tweet`, `search_tweets`, `get_timeline`, `get_mentions` | "Show me @elonmusk's latest posts" / "Search for tweets about MCP" |
+| **Post** | `post_tweet`, `reply_to_tweet`, `quote_tweet` | "Post 'hello world' on X" / "Reply to this tweet saying thanks" |
+| **Read** | `get_tweet`, `search_tweets`, `get_timeline`, `get_mentions` | "Show me @JohannesHoppe's latest posts" / "Search for tweets about MCP" |
 | **Users** | `get_user`, `get_followers`, `get_following` | "Look up @openai" / "Who does this user follow?" |
 | **Engage** | `like_tweet`, `retweet` | "Like that tweet" / "Retweet this" |
 | **Media** | `upload_media` | "Upload this image and post it with the caption..." |
 | **Analytics** | `get_metrics` | "How many impressions did my last post get?" |
+| **Dangerous** | `delete_tweet` | Hidden by default. Enable with `X_MCP_ENABLE_DANGEROUS=true`. |
 
 Accepts tweet URLs or IDs interchangeably -- paste `https://x.com/user/status/123` or just `123`.
+Accepts usernames with or without `@`, or numeric user IDs -- `@JohannesHoppe`, `JohannesHoppe`, or `43859239`.
 
 ---
 
@@ -204,6 +224,9 @@ X_MCP_COMPACT=true
 
 # Engagement deduplication (default: true)
 X_MCP_DEDUP=true
+
+# Destructive tools like delete_tweet (default: disabled, tool is hidden)
+# X_MCP_ENABLE_DANGEROUS=true
 ```
 
 ---

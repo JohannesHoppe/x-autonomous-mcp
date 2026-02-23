@@ -164,6 +164,21 @@ export class XApiClient {
     return result.data.id;
   }
 
+  // --- User ID resolution ---
+
+  async resolveUserId(userRef: string): Promise<string> {
+    // If it's all digits, it's already a numeric ID
+    if (/^\d+$/.test(userRef)) return userRef;
+    // Strip leading @ if present
+    const username = userRef.replace(/^@/, "");
+    const { result } = await this.getUser({ username });
+    const data = result as { data?: { id?: string } };
+    if (!data.data?.id) {
+      throw new Error(`User '${username}' not found`);
+    }
+    return data.data.id;
+  }
+
   // --- Tweet operations ---
 
   async postTweet(params: {

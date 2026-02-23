@@ -277,18 +277,18 @@ Once connected, you have access to these tools (prefixed with `mcp__x-twitter__`
 - **post_tweet** -- Post text, polls, or media. Parameters: `text` (required), `poll_options`, `poll_duration_minutes`, `media_ids`
 - **reply_to_tweet** -- Reply to a tweet. Parameters: `tweet_id` (ID or URL), `text`, `media_ids`
 - **quote_tweet** -- Quote retweet. Parameters: `tweet_id` (ID or URL), `text`, `media_ids`
-- **delete_tweet** -- Delete a tweet. Parameters: `tweet_id` (ID or URL)
+- **delete_tweet** -- Delete a tweet. Parameters: `tweet_id` (ID or URL). **Hidden by default** -- only available when `X_MCP_ENABLE_DANGEROUS=true`.
 
 ### Reading
 - **get_tweet** -- Fetch tweet with metadata. Parameters: `tweet_id` (ID or URL)
-- **search_tweets** -- Search recent tweets (last 7 days). Parameters: `query`, `max_results` (10-100), `next_token`
-- **get_timeline** -- User's recent posts (needs numeric user ID; use get_user to resolve). Parameters: `user_id`, `max_results`, `next_token`
-- **get_mentions** -- Authenticated user's mentions. Parameters: `max_results`, `next_token`
+- **search_tweets** -- Search recent tweets (last 7 days). Parameters: `query`, `max_results` (10-100), `min_likes`, `min_retweets`, `sort_order`, `since_id`, `next_token`
+- **get_timeline** -- User's recent posts. Parameters: `user` (username with or without @, or numeric ID), `max_results`, `next_token`
+- **get_mentions** -- Authenticated user's mentions. Parameters: `max_results`, `since_id`, `next_token`
 
 ### Users
 - **get_user** -- Lookup by username or ID. Parameters: `username` OR `user_id`
-- **get_followers** -- List followers. Parameters: `user_id`, `max_results`, `next_token`
-- **get_following** -- List following. Parameters: `user_id`, `max_results`, `next_token`
+- **get_followers** -- List followers. Parameters: `user` (username or numeric ID), `max_results`, `next_token`
+- **get_following** -- List following. Parameters: `user` (username or numeric ID), `max_results`, `next_token`
 
 ### Engagement
 - **like_tweet** -- Like a tweet. Parameters: `tweet_id` (ID or URL)
@@ -314,9 +314,11 @@ For `search_tweets`, the `query` parameter supports X's full search syntax:
 
 ## Common Patterns
 
-To get a user's latest posts:
-1. Call `get_user` with their username to get their numeric ID
-2. Call `get_timeline` with that ID
+To get a user's latest posts (one step!):
+```
+get_timeline user="@JohannesHoppe"
+```
+No need to look up the user ID first — the server resolves usernames automatically.
 
 To post with an image:
 1. Call `upload_media` with the base64-encoded image data and MIME type

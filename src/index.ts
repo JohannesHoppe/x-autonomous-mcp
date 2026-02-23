@@ -45,6 +45,7 @@ const statePath = process.env.X_MCP_STATE_FILE
 const budgetConfig = loadBudgetConfig();
 const compactMode = process.env.X_MCP_COMPACT !== "false"; // default true
 const dedupEnabled = process.env.X_MCP_DEDUP !== "false"; // default true
+const dangerousEnabled = process.env.X_MCP_ENABLE_DANGEROUS === "true"; // default false
 
 // --- MCP server ---
 
@@ -217,19 +218,22 @@ server.registerTool(
   }, { getTargetTweetId: (args) => parseTweetId(args.tweet_id as string) }),
 );
 
-server.registerTool(
-  "delete_tweet",
-  {
-    description: "Delete a post on X by its ID.",
-    inputSchema: z.object({
-      tweet_id: z.string().describe("The tweet ID or URL to delete"),
-    }).strict(),
-  },
-  wrapHandler("delete_tweet", async (args) => {
-    const id = parseTweetId(args.tweet_id as string);
-    return client.deleteTweet(id);
-  }),
-);
+// Destructive tools — hidden unless X_MCP_ENABLE_DANGEROUS=true
+if (dangerousEnabled) {
+  server.registerTool(
+    "delete_tweet",
+    {
+      description: "Delete a post on X by its ID. This tool is only available when X_MCP_ENABLE_DANGEROUS=true.",
+      inputSchema: z.object({
+        tweet_id: z.string().describe("The tweet ID or URL to delete"),
+      }).strict(),
+    },
+    wrapHandler("delete_tweet", async (args) => {
+      const id = parseTweetId(args.tweet_id as string);
+      return client.deleteTweet(id);
+    }),
+  );
+}
 
 server.registerTool(
   "get_tweet",
@@ -309,16 +313,17 @@ server.registerTool(
 server.registerTool(
   "get_timeline",
   {
-    description: "Fetch a user's recent posts. Requires the user's numeric ID (use get_user first to resolve username to ID).",
+    description: "Fetch a user's recent posts. Accepts a username or numeric user ID.",
     inputSchema: z.object({
-      user_id: z.string().describe("The numeric user ID"),
+      user: z.string().describe("Username (with or without @) or numeric user ID"),
       max_results: z.number().optional().describe("Number of results (5-100, default 10)"),
       next_token: z.string().optional().describe("Pagination token from previous response"),
     }).strict(),
   },
   wrapHandler("get_timeline", async (args) => {
+    const userId = await client.resolveUserId(args.user as string);
     return client.getTimeline(
-      args.user_id as string,
+      userId,
       args.max_results as number | undefined,
       args.next_token as string | undefined,
     );
@@ -347,16 +352,17 @@ server.registerTool(
 server.registerTool(
   "get_followers",
   {
-    description: "List followers of a user by their numeric user ID.",
+    description: "List followers of a user. Accepts a username or numeric user ID.",
     inputSchema: z.object({
-      user_id: z.string().describe("The numeric user ID"),
+      user: z.string().describe("Username (with or without @) or numeric user ID"),
       max_results: z.number().optional().describe("Number of results (1-1000, default 100)"),
       next_token: z.string().optional().describe("Pagination token from previous response"),
     }).strict(),
   },
   wrapHandler("get_followers", async (args) => {
+    const userId = await client.resolveUserId(args.user as string);
     return client.getFollowers(
-      args.user_id as string,
+      userId,
       args.max_results as number | undefined,
       args.next_token as string | undefined,
     );
@@ -366,16 +372,17 @@ server.registerTool(
 server.registerTool(
   "get_following",
   {
-    description: "List who a user follows by their numeric user ID.",
+    description: "List who a user follows. Accepts a username or numeric user ID.",
     inputSchema: z.object({
-      user_id: z.string().describe("The numeric user ID"),
+      user: z.string().describe("Username (with or without @) or numeric user ID"),
       max_results: z.number().optional().describe("Number of results (1-1000, default 100)"),
       next_token: z.string().optional().describe("Pagination token from previous response"),
     }).strict(),
   },
   wrapHandler("get_following", async (args) => {
+    const userId = await client.resolveUserId(args.user as string);
     return client.getFollowing(
-      args.user_id as string,
+      userId,
       args.max_results as number | undefined,
       args.next_token as string | undefined,
     );
