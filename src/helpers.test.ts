@@ -62,4 +62,53 @@ describe("formatResult", () => {
     const result = JSON.parse(formatResult({}, ""));
     expect(result).not.toHaveProperty("rate_limit");
   });
+
+  it("includes budget string when provided", () => {
+    const result = JSON.parse(formatResult({ id: "1" }, "", "3/8 replies, 0/2 originals"));
+    expect(result.budget).toBe("3/8 replies, 0/2 originals");
+  });
+
+  it("omits budget when undefined", () => {
+    const result = JSON.parse(formatResult({ id: "1" }, ""));
+    expect(result).not.toHaveProperty("budget");
+  });
+
+  it("compacts tweet response when compact=true", () => {
+    // formatResult wraps in { data: ... }, and the API response itself has data/includes
+    // So the output is { data: { data: compactTweet } }
+    const apiResponse = {
+      data: {
+        id: "123",
+        text: "Hello",
+        author_id: "456",
+        public_metrics: { like_count: 5, retweet_count: 1, reply_count: 0 },
+        entities: { urls: [] },
+        created_at: "2026-02-23T13:00:00.000Z",
+      },
+      includes: {
+        users: [{ id: "456", username: "author", name: "Author" }],
+      },
+    };
+    const result = JSON.parse(formatResult(apiResponse, "", undefined, true));
+    // compactResponse transforms { data: tweet, includes } → { data: compactTweet }
+    // then formatResult wraps that in { data: ... }
+    expect(result.data.data.author).toBe("@author");
+    expect(result.data.data.likes).toBe(5);
+    expect(result.data.data).not.toHaveProperty("entities");
+    expect(result.data).not.toHaveProperty("includes");
+  });
+
+  it("does not compact when compact=false", () => {
+    const apiResponse = {
+      data: {
+        id: "123",
+        text: "Hello",
+        author_id: "456",
+        entities: { urls: [] },
+      },
+    };
+    const result = JSON.parse(formatResult(apiResponse, "", undefined, false));
+    // No compaction: formatResult wraps the raw API response as-is
+    expect(result.data.data.entities).toBeDefined();
+  });
 });

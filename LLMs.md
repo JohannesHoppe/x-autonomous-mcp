@@ -21,8 +21,8 @@ x-mcp is an MCP (Model Context Protocol) server that connects AI agents to the X
 Run these commands:
 
 ```bash
-git clone https://github.com/JohannesHoppe/x-mcp.git
-cd x-mcp
+git clone https://github.com/JohannesHoppe/x-autonomous-mcp.git
+cd x-autonomous-mcp
 npm install
 npm run build
 ```
@@ -112,7 +112,7 @@ Determine which client the user is using and follow the corresponding instructio
 Run this command (replace the path with the actual absolute path to the cloned repo):
 
 ```bash
-claude mcp add --scope user x-twitter -- node /absolute/path/to/x-mcp/dist/index.js
+claude mcp add --scope user x-twitter -- node /absolute/path/to/x-autonomous-mcp/dist/index.js
 ```
 
 Then restart Claude Code. To verify:
@@ -135,7 +135,7 @@ Add to `claude_desktop_config.json`:
   "mcpServers": {
     "x-twitter": {
       "command": "node",
-      "args": ["/absolute/path/to/x-mcp/dist/index.js"],
+      "args": ["/absolute/path/to/x-autonomous-mcp/dist/index.js"],
       "env": {
         "X_API_KEY": "value",
         "X_API_SECRET": "value",
@@ -162,7 +162,7 @@ Add to the Cursor MCP config file:
   "mcpServers": {
     "x-twitter": {
       "command": "node",
-      "args": ["/absolute/path/to/x-mcp/dist/index.js"],
+      "args": ["/absolute/path/to/x-autonomous-mcp/dist/index.js"],
       "env": {
         "X_API_KEY": "value",
         "X_API_SECRET": "value",
@@ -182,7 +182,7 @@ Verify in Cursor: Settings > MCP Servers -- the server should appear as connecte
 **Option A -- CLI:**
 
 ```bash
-codex mcp add x-twitter --env X_API_KEY=value --env X_API_SECRET=value --env X_ACCESS_TOKEN=value --env X_ACCESS_TOKEN_SECRET=value --env X_BEARER_TOKEN=value -- node /absolute/path/to/x-mcp/dist/index.js
+codex mcp add x-twitter --env X_API_KEY=value --env X_API_SECRET=value --env X_ACCESS_TOKEN=value --env X_ACCESS_TOKEN_SECRET=value --env X_BEARER_TOKEN=value -- node /absolute/path/to/x-autonomous-mcp/dist/index.js
 ```
 
 **Option B -- config.toml:**
@@ -192,7 +192,7 @@ Add to `~/.codex/config.toml` (global) or `.codex/config.toml` (project-scoped):
 ```toml
 [mcp_servers.x-twitter]
 command = "node"
-args = ["/absolute/path/to/x-mcp/dist/index.js"]
+args = ["/absolute/path/to/x-autonomous-mcp/dist/index.js"]
 
 [mcp_servers.x-twitter.env]
 X_API_KEY = "value"
@@ -216,7 +216,7 @@ Add to the Windsurf MCP config:
   "mcpServers": {
     "x-twitter": {
       "command": "node",
-      "args": ["/absolute/path/to/x-mcp/dist/index.js"],
+      "args": ["/absolute/path/to/x-autonomous-mcp/dist/index.js"],
       "env": {
         "X_API_KEY": "value",
         "X_API_SECRET": "value",
@@ -240,7 +240,7 @@ Open Cline's MCP settings: click the MCP Servers icon in Cline's top navigation 
   "mcpServers": {
     "x-twitter": {
       "command": "node",
-      "args": ["/absolute/path/to/x-mcp/dist/index.js"],
+      "args": ["/absolute/path/to/x-autonomous-mcp/dist/index.js"],
       "env": {
         "X_API_KEY": "value",
         "X_API_SECRET": "value",
@@ -260,12 +260,12 @@ Open Cline's MCP settings: click the MCP Servers icon in Cline's top navigation 
 This is a standard stdio MCP server. Point your client at:
 
 ```
-node /absolute/path/to/x-mcp/dist/index.js
+node /absolute/path/to/x-autonomous-mcp/dist/index.js
 ```
 
 With environment variables: `X_API_KEY`, `X_API_SECRET`, `X_ACCESS_TOKEN`, `X_ACCESS_TOKEN_SECRET`, `X_BEARER_TOKEN`.
 
-In all cases, replace `/absolute/path/to/x-mcp` with the actual path where the repo was cloned, and replace `value` with the actual credentials from Step 2.
+In all cases, replace `/absolute/path/to/x-autonomous-mcp` with the actual path where the repo was cloned, and replace `value` with the actual credentials from Step 2.
 
 ---
 

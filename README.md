@@ -1,6 +1,6 @@
-# x-mcp
+# x-autonomous-mcp
 
-An MCP (Model Context Protocol) server that gives AI agents full access to the X (Twitter) API. Post tweets, search, read timelines, like, retweet, upload media -- all through natural language. Optimized for autonomous LLM agents with engagement filtering, relevancy sorting, incremental polling, strict schema validation, and lean responses.
+An MCP (Model Context Protocol) server that gives AI agents full access to the X (Twitter) API — with built-in safety rails for autonomous operation. Post tweets, search, read timelines, like, retweet, upload media, all through natural language. Includes daily budget limits, engagement deduplication, compact responses (~80% token savings), and self-describing errors.
 
 Works with **Claude Code**, **Claude Desktop**, **OpenAI Codex**, **Cursor**, **Windsurf**, **Cline**, and any other MCP-compatible client.
 
@@ -8,11 +8,75 @@ Works with **Claude Code**, **Claude Desktop**, **OpenAI Codex**, **Cursor**, **
 
 ---
 
+## Safety Features
+
+### Daily budget limits
+
+Hard limits per action type per day. The MCP server refuses when exhausted — works even if the LLM ignores every instruction.
+
+```
+X_MCP_MAX_REPLIES=8      # Max replies per day (default)
+X_MCP_MAX_ORIGINALS=2    # Max standalone posts per day
+X_MCP_MAX_LIKES=20       # Max likes per day
+X_MCP_MAX_RETWEETS=5     # Max retweets per day
+```
+
+Set to `0` to disable an action entirely. Set to `-1` for unlimited.
+
+### Budget counters in every response
+
+Every MCP response includes the remaining budget — reads and writes alike. The LLM sees its limits proactively without reading memory files:
+
+```json
+{
+  "data": { "id": "123", "text": "..." },
+  "rate_limit": "299/300 remaining, resets in 900s",
+  "budget": "3/8 replies, 0/2 originals, 5/20 likes, 1/5 retweets | last action: 3m ago"
+}
+```
+
+### Compact responses (default on)
+
+Strips everything the LLM doesn't need (~80% token reduction per API call):
+
+```json
+{
+  "id": "123",
+  "text": "Hello world",
+  "author": "@username",
+  "likes": 237,
+  "retweets": 5,
+  "replies": 12,
+  "is_reply_to": "456",
+  "created_at": "2026-02-23T13:34:36.000Z"
+}
+```
+
+Dropped: `entities`, `edit_history_tweet_ids`, `conversation_id`, `lang`, `annotations`, URL expansions, image metadata. Flattens `public_metrics` and resolves `author_id` to `@username`.
+
+### Engagement deduplication (default on)
+
+Never reply to, like, or retweet the same tweet twice. Permanently tracked — prevents spam reports from re-engaging the same tweet days later.
+
+### Self-describing errors
+
+When the LLM hallucinates a parameter on `post_tweet`, the error tells it what to do:
+
+```
+Unknown parameter 'reply_to_tweet_id': Use the 'reply_to_tweet' tool instead.
+```
+
+### Strict schema validation
+
+All 16 tools use `.strict()` Zod schemas. Unknown parameters cause a validation error instead of being silently stripped.
+
+---
+
 ## Features
 
 ### Engagement filtering on `search_tweets`
 
-The X API v2 has no `min_faves` operator. x-mcp adds **client-side engagement filtering** so low-engagement tweets never reach the LLM:
+The X API v2 has no `min_faves` operator. x-autonomous-mcp adds **client-side engagement filtering** so low-engagement tweets never reach the LLM:
 
 ```
 search_tweets query="AI safety -is:retweet" max_results=10 min_likes=20 min_retweets=5
@@ -42,10 +106,6 @@ search_tweets query="@mybot" since_id="2025881827982876805"
 - Omits `profile_image_url` and media expansions from API requests (useless for LLMs, wastes tokens)
 - Includes `public_metrics` in user expansions for search results (so agents can see follower counts when evaluating reply targets)
 
-### Strict schema validation
-
-All 16 tools use `.strict()` Zod schemas. If an LLM hallucinates a parameter name (e.g., `reply_to_tweet_id` instead of using the `reply_to_tweet` tool), the server returns a clear validation error instead of silently ignoring the parameter.
-
 ---
 
 ## What Can It Do?
@@ -68,8 +128,8 @@ Accepts tweet URLs or IDs interchangeably -- paste `https://x.com/user/status/12
 ### 1. Clone and build
 
 ```bash
-git clone https://github.com/JohannesHoppe/x-mcp.git
-cd x-mcp
+git clone https://github.com/JohannesHoppe/x-autonomous-mcp.git
+cd x-autonomous-mcp
 npm install
 npm run build
 ```
@@ -128,6 +188,24 @@ X_ACCESS_TOKEN=your_access_token
 X_ACCESS_TOKEN_SECRET=your_access_token_secret
 ```
 
+### 4. Configure safety features (optional)
+
+See `.env.example` for all available options:
+
+```bash
+# Daily budget limits (defaults shown)
+X_MCP_MAX_REPLIES=8
+X_MCP_MAX_ORIGINALS=2
+X_MCP_MAX_LIKES=20
+X_MCP_MAX_RETWEETS=5
+
+# Compact responses (default: true)
+X_MCP_COMPACT=true
+
+# Engagement deduplication (default: true)
+X_MCP_DEDUP=true
+```
+
 ---
 
 ## Connect to Your Client
@@ -137,10 +215,10 @@ Pick your client below. You only need to follow one section.
 ### Claude Code
 
 ```bash
-claude mcp add --scope user x-twitter -- node /ABSOLUTE/PATH/TO/x-mcp/dist/index.js
+claude mcp add --scope user x-twitter -- node /ABSOLUTE/PATH/TO/x-autonomous-mcp/dist/index.js
 ```
 
-Replace `/ABSOLUTE/PATH/TO/x-mcp` with the actual path where you cloned the repo. Then restart Claude Code.
+Replace `/ABSOLUTE/PATH/TO/x-autonomous-mcp` with the actual path where you cloned the repo. Then restart Claude Code.
 
 ### Claude Desktop
 
@@ -154,7 +232,7 @@ Add to your `claude_desktop_config.json`:
   "mcpServers": {
     "x-twitter": {
       "command": "node",
-      "args": ["/ABSOLUTE/PATH/TO/x-mcp/dist/index.js"],
+      "args": ["/ABSOLUTE/PATH/TO/x-autonomous-mcp/dist/index.js"],
       "env": {
         "X_API_KEY": "your_consumer_key",
         "X_API_SECRET": "your_secret_key",
@@ -179,7 +257,7 @@ Add to your Cursor MCP config:
   "mcpServers": {
     "x-twitter": {
       "command": "node",
-      "args": ["/ABSOLUTE/PATH/TO/x-mcp/dist/index.js"],
+      "args": ["/ABSOLUTE/PATH/TO/x-autonomous-mcp/dist/index.js"],
       "env": {
         "X_API_KEY": "your_consumer_key",
         "X_API_SECRET": "your_secret_key",
@@ -199,7 +277,7 @@ You can also verify the connection in Cursor Settings > MCP Servers.
 **Option A: CLI**
 
 ```bash
-codex mcp add x-twitter --env X_API_KEY=your_consumer_key --env X_API_SECRET=your_secret_key --env X_ACCESS_TOKEN=your_access_token --env X_ACCESS_TOKEN_SECRET=your_access_token_secret --env X_BEARER_TOKEN=your_bearer_token -- node /ABSOLUTE/PATH/TO/x-mcp/dist/index.js
+codex mcp add x-twitter --env X_API_KEY=your_consumer_key --env X_API_SECRET=your_secret_key --env X_ACCESS_TOKEN=your_access_token --env X_ACCESS_TOKEN_SECRET=your_access_token_secret --env X_BEARER_TOKEN=your_bearer_token -- node /ABSOLUTE/PATH/TO/x-autonomous-mcp/dist/index.js
 ```
 
 **Option B: config.toml**
@@ -209,7 +287,7 @@ Add to `~/.codex/config.toml` (global) or `.codex/config.toml` (project-scoped):
 ```toml
 [mcp_servers.x-twitter]
 command = "node"
-args = ["/ABSOLUTE/PATH/TO/x-mcp/dist/index.js"]
+args = ["/ABSOLUTE/PATH/TO/x-autonomous-mcp/dist/index.js"]
 
 [mcp_servers.x-twitter.env]
 X_API_KEY = "your_consumer_key"
@@ -228,7 +306,7 @@ Add to `~/.codeium/windsurf/mcp_config.json`:
   "mcpServers": {
     "x-twitter": {
       "command": "node",
-      "args": ["/ABSOLUTE/PATH/TO/x-mcp/dist/index.js"],
+      "args": ["/ABSOLUTE/PATH/TO/x-autonomous-mcp/dist/index.js"],
       "env": {
         "X_API_KEY": "your_consumer_key",
         "X_API_SECRET": "your_secret_key",
@@ -252,7 +330,7 @@ Open Cline's MCP settings (click the MCP Servers icon in Cline's top nav > Confi
   "mcpServers": {
     "x-twitter": {
       "command": "node",
-      "args": ["/ABSOLUTE/PATH/TO/x-mcp/dist/index.js"],
+      "args": ["/ABSOLUTE/PATH/TO/x-autonomous-mcp/dist/index.js"],
       "env": {
         "X_API_KEY": "your_consumer_key",
         "X_API_SECRET": "your_secret_key",
@@ -272,7 +350,7 @@ Open Cline's MCP settings (click the MCP Servers icon in Cline's top nav > Confi
 This is a standard stdio MCP server. For any MCP-compatible client, point it at:
 
 ```
-node /ABSOLUTE/PATH/TO/x-mcp/dist/index.js
+node /ABSOLUTE/PATH/TO/x-autonomous-mcp/dist/index.js
 ```
 
 With these environment variables: `X_API_KEY`, `X_API_SECRET`, `X_ACCESS_TOKEN`, `X_ACCESS_TOKEN_SECRET`, `X_BEARER_TOKEN`.

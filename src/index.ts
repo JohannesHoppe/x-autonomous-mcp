@@ -8,6 +8,15 @@ import { fileURLToPath } from "url";
 import { z } from "zod";
 import { XApiClient } from "./x-api.js";
 import { parseTweetId, errorMessage, formatResult } from "./helpers.js";
+import { loadState, saveState } from "./state.js";
+import {
+  loadBudgetConfig,
+  formatBudgetString,
+  checkBudget,
+  checkDedup,
+  recordAction,
+  getParameterHint,
+} from "./safety.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, "..", ".env") });
@@ -28,16 +37,104 @@ const client = new XApiClient({
   bearerToken: requireEnv("X_BEARER_TOKEN"),
 });
 
+// --- Safety feature configuration ---
+
+const statePath = process.env.X_MCP_STATE_FILE
+  || path.resolve(process.cwd(), "x-mcp-state.json");
+const budgetConfig = loadBudgetConfig();
+const compactMode = process.env.X_MCP_COMPACT !== "false"; // default true
+const dedupEnabled = process.env.X_MCP_DEDUP !== "false"; // default true
+
+// --- MCP server ---
+
 const server = new McpServer({
-  name: "x-mcp",
+  name: "x-autonomous-mcp",
   version: "1.0.0",
 });
 
+// --- Handler wrapper ---
+// Centralizes: state loading, budget checks, dedup checks, action recording,
+// response formatting (compact + budget string), and error handling.
+
+interface WrapOptions {
+  getTargetTweetId?: (args: Record<string, unknown>) => string;
+}
+
+type ToolResult = {
+  content: Array<{ type: "text"; text: string }>;
+  isError?: boolean;
+};
+
+function wrapHandler(
+  toolName: string,
+  handler: (args: Record<string, unknown>) => Promise<{ result: unknown; rateLimit: string }>,
+  opts?: WrapOptions,
+): (args: Record<string, unknown>) => Promise<ToolResult> {
+  return async (args) => {
+    try {
+      const state = loadState(statePath);
+
+      // Budget check (write tools only)
+      const budgetError = checkBudget(toolName, state, budgetConfig);
+      if (budgetError) {
+        const budgetString = formatBudgetString(state, budgetConfig);
+        return {
+          content: [{ type: "text", text: `Error: ${budgetError}\n\nCurrent budget: ${budgetString}` }],
+          isError: true,
+        };
+      }
+
+      // Dedup check (engagement tools only)
+      const targetId = opts?.getTargetTweetId?.(args);
+      if (dedupEnabled && targetId) {
+        const dedupError = checkDedup(toolName, targetId, state);
+        if (dedupError) {
+          const budgetString = formatBudgetString(state, budgetConfig);
+          return {
+            content: [{ type: "text", text: `Error: ${dedupError}\n\nCurrent budget: ${budgetString}` }],
+            isError: true,
+          };
+        }
+      }
+
+      // Execute the actual API call
+      const { result, rateLimit } = await handler(args);
+
+      // Record action and save state (for write tools)
+      const updatedState = recordAction(toolName, targetId ?? null, state);
+      saveState(statePath, updatedState);
+
+      // Format response with budget string and compact mode
+      const budgetString = formatBudgetString(updatedState, budgetConfig);
+      return {
+        content: [{ type: "text", text: formatResult(result, rateLimit, budgetString, compactMode) }],
+      };
+    } catch (e: unknown) {
+      // Include budget in error responses when possible
+      try {
+        const state = loadState(statePath);
+        const budgetString = formatBudgetString(state, budgetConfig);
+        return {
+          content: [{ type: "text", text: `Error: ${errorMessage(e)}\n\nCurrent budget: ${budgetString}` }],
+          isError: true,
+        };
+      } catch {
+        return {
+          content: [{ type: "text", text: `Error: ${errorMessage(e)}` }],
+          isError: true,
+        };
+      }
+    }
+  };
+}
+
 // ============================================================
 // TWEET TOOLS
-// All tools use .strict() schemas — unknown parameters cause
-// a validation error instead of being silently stripped.
 // ============================================================
+
+// post_tweet uses .passthrough() instead of .strict() to enable
+// Feature 5: self-describing error hints for common mistakes.
+const POST_TWEET_VALID_KEYS = ["text", "poll_options", "poll_duration_minutes", "media_ids"];
 
 server.registerTool(
   "post_tweet",
@@ -48,20 +145,32 @@ server.registerTool(
       poll_options: z.array(z.string()).min(2).max(4).optional().describe("Poll options (2-4 choices)"),
       poll_duration_minutes: z.number().int().min(1).max(10080).optional().describe("Poll duration in minutes (1-10080, default 1440 = 24h)"),
       media_ids: z.array(z.string()).optional().describe("Media IDs to attach (from upload_media)"),
-    }).strict(),
+    }).passthrough(),
   },
-  async ({ text, poll_options, poll_duration_minutes, media_ids }) => {
-    try {
-      const { result, rateLimit } = await client.postTweet({
-        text,
-        poll_options,
-        poll_duration_minutes,
-        media_ids,
-      });
-      return { content: [{ type: "text", text: formatResult(result, rateLimit) }] };
-    } catch (e: unknown) {
-      return { content: [{ type: "text", text: `Error: ${errorMessage(e)}` }], isError: true };
+  async (args) => {
+    // Feature 5: Check for known-bad parameters before processing
+    const unknownKeys = Object.keys(args).filter((k) => !POST_TWEET_VALID_KEYS.includes(k));
+    if (unknownKeys.length > 0) {
+      const hints = unknownKeys
+        .map((k) => {
+          const hint = getParameterHint("post_tweet", k);
+          return hint ? `Unknown parameter '${k}': ${hint}` : `Unknown parameter '${k}'.`;
+        })
+        .join("\n");
+      return {
+        content: [{ type: "text", text: `Error: ${hints}\n\nValid parameters for post_tweet: ${POST_TWEET_VALID_KEYS.join(", ")}` }],
+        isError: true,
+      };
     }
+
+    return wrapHandler("post_tweet", async (a) => {
+      return client.postTweet({
+        text: a.text as string,
+        poll_options: a.poll_options as string[] | undefined,
+        poll_duration_minutes: a.poll_duration_minutes as number | undefined,
+        media_ids: a.media_ids as string[] | undefined,
+      });
+    })(args);
   },
 );
 
@@ -75,19 +184,14 @@ server.registerTool(
       media_ids: z.array(z.string()).optional().describe("Media IDs to attach"),
     }).strict(),
   },
-  async ({ tweet_id, text, media_ids }) => {
-    try {
-      const id = parseTweetId(tweet_id);
-      const { result, rateLimit } = await client.postTweet({
-        text,
-        reply_to: id,
-        media_ids,
-      });
-      return { content: [{ type: "text", text: formatResult(result, rateLimit) }] };
-    } catch (e: unknown) {
-      return { content: [{ type: "text", text: `Error: ${errorMessage(e)}` }], isError: true };
-    }
-  },
+  wrapHandler("reply_to_tweet", async (args) => {
+    const id = parseTweetId(args.tweet_id as string);
+    return client.postTweet({
+      text: args.text as string,
+      reply_to: id,
+      media_ids: args.media_ids as string[] | undefined,
+    });
+  }, { getTargetTweetId: (args) => parseTweetId(args.tweet_id as string) }),
 );
 
 server.registerTool(
@@ -100,19 +204,14 @@ server.registerTool(
       media_ids: z.array(z.string()).optional().describe("Media IDs to attach"),
     }).strict(),
   },
-  async ({ tweet_id, text, media_ids }) => {
-    try {
-      const id = parseTweetId(tweet_id);
-      const { result, rateLimit } = await client.postTweet({
-        text,
-        quote_tweet_id: id,
-        media_ids,
-      });
-      return { content: [{ type: "text", text: formatResult(result, rateLimit) }] };
-    } catch (e: unknown) {
-      return { content: [{ type: "text", text: `Error: ${errorMessage(e)}` }], isError: true };
-    }
-  },
+  wrapHandler("quote_tweet", async (args) => {
+    const id = parseTweetId(args.tweet_id as string);
+    return client.postTweet({
+      text: args.text as string,
+      quote_tweet_id: id,
+      media_ids: args.media_ids as string[] | undefined,
+    });
+  }, { getTargetTweetId: (args) => parseTweetId(args.tweet_id as string) }),
 );
 
 server.registerTool(
@@ -123,15 +222,10 @@ server.registerTool(
       tweet_id: z.string().describe("The tweet ID or URL to delete"),
     }).strict(),
   },
-  async ({ tweet_id }) => {
-    try {
-      const id = parseTweetId(tweet_id);
-      const { result, rateLimit } = await client.deleteTweet(id);
-      return { content: [{ type: "text", text: formatResult(result, rateLimit) }] };
-    } catch (e: unknown) {
-      return { content: [{ type: "text", text: `Error: ${errorMessage(e)}` }], isError: true };
-    }
-  },
+  wrapHandler("delete_tweet", async (args) => {
+    const id = parseTweetId(args.tweet_id as string);
+    return client.deleteTweet(id);
+  }),
 );
 
 server.registerTool(
@@ -142,15 +236,10 @@ server.registerTool(
       tweet_id: z.string().describe("The tweet ID or URL to fetch"),
     }).strict(),
   },
-  async ({ tweet_id }) => {
-    try {
-      const id = parseTweetId(tweet_id);
-      const { result, rateLimit } = await client.getTweet(id);
-      return { content: [{ type: "text", text: formatResult(result, rateLimit) }] };
-    } catch (e: unknown) {
-      return { content: [{ type: "text", text: `Error: ${errorMessage(e)}` }], isError: true };
-    }
-  },
+  wrapHandler("get_tweet", async (args) => {
+    const id = parseTweetId(args.tweet_id as string);
+    return client.getTweet(id);
+  }),
 );
 
 // ============================================================
@@ -171,19 +260,19 @@ server.registerTool(
       next_token: z.string().optional().describe("Pagination token from previous response"),
     }).strict(),
   },
-  async ({ query, max_results, min_likes, min_retweets, sort_order, since_id, next_token }) => {
-    try {
-      const { result, rateLimit } = await client.searchTweets(query, max_results, next_token, {
-        minLikes: min_likes,
-        minRetweets: min_retweets,
-        sortOrder: sort_order,
-        sinceId: since_id,
-      });
-      return { content: [{ type: "text", text: formatResult(result, rateLimit) }] };
-    } catch (e: unknown) {
-      return { content: [{ type: "text", text: `Error: ${errorMessage(e)}` }], isError: true };
-    }
-  },
+  wrapHandler("search_tweets", async (args) => {
+    return client.searchTweets(
+      args.query as string,
+      args.max_results as number | undefined,
+      args.next_token as string | undefined,
+      {
+        minLikes: args.min_likes as number | undefined,
+        minRetweets: args.min_retweets as number | undefined,
+        sortOrder: args.sort_order as string | undefined,
+        sinceId: args.since_id as string | undefined,
+      },
+    );
+  }),
 );
 
 // ============================================================
@@ -199,16 +288,16 @@ server.registerTool(
       user_id: z.string().optional().describe("Numeric user ID"),
     }).strict(),
   },
-  async ({ username, user_id }) => {
-    try {
-      if (!username && !user_id) {
-        return { content: [{ type: "text", text: "Error: Provide either username or user_id" }], isError: true };
-      }
-      const { result, rateLimit } = await client.getUser({ username, userId: user_id });
-      return { content: [{ type: "text", text: formatResult(result, rateLimit) }] };
-    } catch (e: unknown) {
-      return { content: [{ type: "text", text: `Error: ${errorMessage(e)}` }], isError: true };
+  async (args) => {
+    if (!args.username && !args.user_id) {
+      return { content: [{ type: "text" as const, text: "Error: Provide either username or user_id" }], isError: true };
     }
+    return wrapHandler("get_user", async (a) => {
+      return client.getUser({
+        username: a.username as string | undefined,
+        userId: a.user_id as string | undefined,
+      });
+    })(args as Record<string, unknown>);
   },
 );
 
@@ -222,14 +311,13 @@ server.registerTool(
       next_token: z.string().optional().describe("Pagination token from previous response"),
     }).strict(),
   },
-  async ({ user_id, max_results, next_token }) => {
-    try {
-      const { result, rateLimit } = await client.getTimeline(user_id, max_results, next_token);
-      return { content: [{ type: "text", text: formatResult(result, rateLimit) }] };
-    } catch (e: unknown) {
-      return { content: [{ type: "text", text: `Error: ${errorMessage(e)}` }], isError: true };
-    }
-  },
+  wrapHandler("get_timeline", async (args) => {
+    return client.getTimeline(
+      args.user_id as string,
+      args.max_results as number | undefined,
+      args.next_token as string | undefined,
+    );
+  }),
 );
 
 server.registerTool(
@@ -242,14 +330,13 @@ server.registerTool(
       next_token: z.string().optional().describe("Pagination token from previous response"),
     }).strict(),
   },
-  async ({ max_results, since_id, next_token }) => {
-    try {
-      const { result, rateLimit } = await client.getMentions(max_results, next_token, since_id);
-      return { content: [{ type: "text", text: formatResult(result, rateLimit) }] };
-    } catch (e: unknown) {
-      return { content: [{ type: "text", text: `Error: ${errorMessage(e)}` }], isError: true };
-    }
-  },
+  wrapHandler("get_mentions", async (args) => {
+    return client.getMentions(
+      args.max_results as number | undefined,
+      args.next_token as string | undefined,
+      args.since_id as string | undefined,
+    );
+  }),
 );
 
 server.registerTool(
@@ -262,14 +349,13 @@ server.registerTool(
       next_token: z.string().optional().describe("Pagination token from previous response"),
     }).strict(),
   },
-  async ({ user_id, max_results, next_token }) => {
-    try {
-      const { result, rateLimit } = await client.getFollowers(user_id, max_results, next_token);
-      return { content: [{ type: "text", text: formatResult(result, rateLimit) }] };
-    } catch (e: unknown) {
-      return { content: [{ type: "text", text: `Error: ${errorMessage(e)}` }], isError: true };
-    }
-  },
+  wrapHandler("get_followers", async (args) => {
+    return client.getFollowers(
+      args.user_id as string,
+      args.max_results as number | undefined,
+      args.next_token as string | undefined,
+    );
+  }),
 );
 
 server.registerTool(
@@ -282,14 +368,13 @@ server.registerTool(
       next_token: z.string().optional().describe("Pagination token from previous response"),
     }).strict(),
   },
-  async ({ user_id, max_results, next_token }) => {
-    try {
-      const { result, rateLimit } = await client.getFollowing(user_id, max_results, next_token);
-      return { content: [{ type: "text", text: formatResult(result, rateLimit) }] };
-    } catch (e: unknown) {
-      return { content: [{ type: "text", text: `Error: ${errorMessage(e)}` }], isError: true };
-    }
-  },
+  wrapHandler("get_following", async (args) => {
+    return client.getFollowing(
+      args.user_id as string,
+      args.max_results as number | undefined,
+      args.next_token as string | undefined,
+    );
+  }),
 );
 
 // ============================================================
@@ -304,15 +389,10 @@ server.registerTool(
       tweet_id: z.string().describe("The tweet ID or URL to like"),
     }).strict(),
   },
-  async ({ tweet_id }) => {
-    try {
-      const id = parseTweetId(tweet_id);
-      const { result, rateLimit } = await client.likeTweet(id);
-      return { content: [{ type: "text", text: formatResult(result, rateLimit) }] };
-    } catch (e: unknown) {
-      return { content: [{ type: "text", text: `Error: ${errorMessage(e)}` }], isError: true };
-    }
-  },
+  wrapHandler("like_tweet", async (args) => {
+    const id = parseTweetId(args.tweet_id as string);
+    return client.likeTweet(id);
+  }, { getTargetTweetId: (args) => parseTweetId(args.tweet_id as string) }),
 );
 
 server.registerTool(
@@ -323,15 +403,10 @@ server.registerTool(
       tweet_id: z.string().describe("The tweet ID or URL to retweet"),
     }).strict(),
   },
-  async ({ tweet_id }) => {
-    try {
-      const id = parseTweetId(tweet_id);
-      const { result, rateLimit } = await client.retweet(id);
-      return { content: [{ type: "text", text: formatResult(result, rateLimit) }] };
-    } catch (e: unknown) {
-      return { content: [{ type: "text", text: `Error: ${errorMessage(e)}` }], isError: true };
-    }
-  },
+  wrapHandler("retweet", async (args) => {
+    const id = parseTweetId(args.tweet_id as string);
+    return client.retweet(id);
+  }, { getTargetTweetId: (args) => parseTweetId(args.tweet_id as string) }),
 );
 
 // ============================================================
@@ -348,23 +423,17 @@ server.registerTool(
       media_category: z.string().optional().describe("Category: 'tweet_image', 'tweet_gif', or 'tweet_video' (default: tweet_image)"),
     }).strict(),
   },
-  async ({ media_data, mime_type, media_category }) => {
-    try {
-      const { mediaId, rateLimit } = await client.uploadMedia(
-        media_data,
-        mime_type,
-        media_category || "tweet_image",
-      );
-      return {
-        content: [{
-          type: "text",
-          text: formatResult({ media_id: mediaId, message: "Upload complete. Use this media_id in post_tweet." }, rateLimit),
-        }],
-      };
-    } catch (e: unknown) {
-      return { content: [{ type: "text", text: `Error: ${errorMessage(e)}` }], isError: true };
-    }
-  },
+  wrapHandler("upload_media", async (args) => {
+    const { mediaId, rateLimit } = await client.uploadMedia(
+      args.media_data as string,
+      args.mime_type as string,
+      (args.media_category as string) || "tweet_image",
+    );
+    return {
+      result: { media_id: mediaId, message: "Upload complete. Use this media_id in post_tweet." },
+      rateLimit,
+    };
+  }),
 );
 
 // ============================================================
@@ -379,15 +448,10 @@ server.registerTool(
       tweet_id: z.string().describe("The tweet ID or URL to get metrics for"),
     }).strict(),
   },
-  async ({ tweet_id }) => {
-    try {
-      const id = parseTweetId(tweet_id);
-      const { result, rateLimit } = await client.getTweetMetrics(id);
-      return { content: [{ type: "text", text: formatResult(result, rateLimit) }] };
-    } catch (e: unknown) {
-      return { content: [{ type: "text", text: `Error: ${errorMessage(e)}` }], isError: true };
-    }
-  },
+  wrapHandler("get_metrics", async (args) => {
+    const id = parseTweetId(args.tweet_id as string);
+    return client.getTweetMetrics(id);
+  }),
 );
 
 // ============================================================

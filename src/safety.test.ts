@@ -1,0 +1,299 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import {
+  loadBudgetConfig,
+  formatBudgetString,
+  checkBudget,
+  checkDedup,
+  recordAction,
+  getParameterHint,
+} from "./safety.js";
+import type { BudgetConfig } from "./safety.js";
+import { getDefaultState } from "./state.js";
+import type { StateFile } from "./state.js";
+
+function makeConfig(overrides?: Partial<BudgetConfig>): BudgetConfig {
+  return { maxReplies: 8, maxOriginals: 2, maxLikes: 20, maxRetweets: 5, ...overrides };
+}
+
+function makeState(overrides?: Partial<StateFile>): StateFile {
+  return { ...getDefaultState(), ...overrides };
+}
+
+describe("loadBudgetConfig", () => {
+  beforeEach(() => {
+    delete process.env.X_MCP_MAX_REPLIES;
+    delete process.env.X_MCP_MAX_ORIGINALS;
+    delete process.env.X_MCP_MAX_LIKES;
+    delete process.env.X_MCP_MAX_RETWEETS;
+  });
+
+  it("returns defaults when no env vars set", () => {
+    const config = loadBudgetConfig();
+    expect(config).toEqual({ maxReplies: 8, maxOriginals: 2, maxLikes: 20, maxRetweets: 5 });
+  });
+
+  it("reads custom values from env", () => {
+    process.env.X_MCP_MAX_REPLIES = "3";
+    process.env.X_MCP_MAX_ORIGINALS = "0";
+    process.env.X_MCP_MAX_LIKES = "-1";
+    process.env.X_MCP_MAX_RETWEETS = "10";
+
+    const config = loadBudgetConfig();
+    expect(config).toEqual({ maxReplies: 3, maxOriginals: 0, maxLikes: -1, maxRetweets: 10 });
+  });
+
+  it("falls back to defaults for non-numeric values", () => {
+    process.env.X_MCP_MAX_REPLIES = "abc";
+    const config = loadBudgetConfig();
+    expect(config.maxReplies).toBe(8);
+  });
+});
+
+describe("formatBudgetString", () => {
+  it("formats normal counters", () => {
+    const state = makeState({
+      budget: { date: "2026-02-23", replies: 3, originals: 0, likes: 5, retweets: 1 },
+    });
+    const result = formatBudgetString(state, makeConfig());
+    expect(result).toBe("3/8 replies, 0/2 originals, 5/20 likes, 1/5 retweets");
+  });
+
+  it("shows LIMIT REACHED for exhausted counters", () => {
+    const state = makeState({
+      budget: { date: "2026-02-23", replies: 8, originals: 2, likes: 20, retweets: 5 },
+    });
+    const result = formatBudgetString(state, makeConfig());
+    expect(result).toContain("8/8 replies (LIMIT REACHED)");
+    expect(result).toContain("2/2 originals (LIMIT REACHED)");
+  });
+
+  it("shows unlimited for -1 limits", () => {
+    const state = makeState({
+      budget: { date: "2026-02-23", replies: 3, originals: 0, likes: 0, retweets: 0 },
+    });
+    const result = formatBudgetString(state, makeConfig({ maxReplies: -1 }));
+    expect(result).toContain("3/unlimited replies");
+  });
+
+  it("shows DISABLED for 0 limits", () => {
+    const state = makeState({
+      budget: { date: "2026-02-23", replies: 0, originals: 0, likes: 0, retweets: 0 },
+    });
+    const result = formatBudgetString(state, makeConfig({ maxLikes: 0 }));
+    expect(result).toContain("0/0 likes (DISABLED)");
+  });
+
+  it("includes relative time for last_write_at", () => {
+    const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    const state = makeState({ last_write_at: fiveMinAgo });
+    const result = formatBudgetString(state, makeConfig());
+    expect(result).toContain("| last action: 5m ago");
+  });
+
+  it("omits last action when last_write_at is null", () => {
+    const state = makeState({ last_write_at: null });
+    const result = formatBudgetString(state, makeConfig());
+    expect(result).not.toContain("last action");
+  });
+});
+
+describe("checkBudget", () => {
+  it("returns null for read-only tools", () => {
+    expect(checkBudget("get_tweet", makeState(), makeConfig())).toBeNull();
+    expect(checkBudget("search_tweets", makeState(), makeConfig())).toBeNull();
+    expect(checkBudget("get_user", makeState(), makeConfig())).toBeNull();
+  });
+
+  it("returns null when under limit", () => {
+    const state = makeState({
+      budget: { date: "2026-02-23", replies: 3, originals: 0, likes: 0, retweets: 0 },
+    });
+    expect(checkBudget("reply_to_tweet", state, makeConfig())).toBeNull();
+  });
+
+  it("returns error when at limit", () => {
+    const state = makeState({
+      budget: { date: "2026-02-23", replies: 8, originals: 0, likes: 0, retweets: 0 },
+    });
+    const result = checkBudget("reply_to_tweet", state, makeConfig());
+    expect(result).toContain("limit reached");
+    expect(result).toContain("8/8");
+    expect(result).toContain("Remaining today");
+  });
+
+  it("returns error when action is disabled (max=0)", () => {
+    const state = makeState();
+    const result = checkBudget("like_tweet", state, makeConfig({ maxLikes: 0 }));
+    expect(result).toContain("disabled");
+    expect(result).toContain("limit: 0");
+  });
+
+  it("returns null for unlimited action (max=-1)", () => {
+    const state = makeState({
+      budget: { date: "2026-02-23", replies: 999, originals: 0, likes: 0, retweets: 0 },
+    });
+    expect(checkBudget("reply_to_tweet", state, makeConfig({ maxReplies: -1 }))).toBeNull();
+  });
+
+  it("maps post_tweet to originals budget", () => {
+    const state = makeState({
+      budget: { date: "2026-02-23", replies: 0, originals: 2, likes: 0, retweets: 0 },
+    });
+    const result = checkBudget("post_tweet", state, makeConfig());
+    expect(result).toContain("limit reached");
+  });
+
+  it("maps quote_tweet to originals budget", () => {
+    const state = makeState({
+      budget: { date: "2026-02-23", replies: 0, originals: 2, likes: 0, retweets: 0 },
+    });
+    const result = checkBudget("quote_tweet", state, makeConfig());
+    expect(result).toContain("limit reached");
+  });
+
+  it("returns null for delete_tweet (no budget)", () => {
+    expect(checkBudget("delete_tweet", makeState(), makeConfig())).toBeNull();
+  });
+});
+
+describe("checkDedup", () => {
+  it("returns null for first engagement", () => {
+    const state = makeState();
+    expect(checkDedup("like_tweet", "123", state)).toBeNull();
+  });
+
+  it("returns error for duplicate engagement", () => {
+    const state = makeState({
+      engaged: {
+        replied_to: [],
+        liked: [{ tweet_id: "123", at: "2026-02-23T10:00:00.000Z" }],
+        retweeted: [],
+        quoted: [],
+      },
+    });
+    const result = checkDedup("like_tweet", "123", state);
+    expect(result).toContain("Already liked tweet 123");
+    expect(result).toContain("2026-02-23T10:00:00.000Z");
+    expect(result).toContain("Duplicate blocked");
+  });
+
+  it("returns null for tools not in dedup map", () => {
+    expect(checkDedup("post_tweet", "123", makeState())).toBeNull();
+    expect(checkDedup("get_tweet", "123", makeState())).toBeNull();
+  });
+
+  it("checks correct dedup set per tool", () => {
+    const state = makeState({
+      engaged: {
+        replied_to: [{ tweet_id: "111", at: "2026-02-23T10:00:00.000Z" }],
+        liked: [{ tweet_id: "222", at: "2026-02-23T10:00:00.000Z" }],
+        retweeted: [{ tweet_id: "333", at: "2026-02-23T10:00:00.000Z" }],
+        quoted: [{ tweet_id: "444", at: "2026-02-23T10:00:00.000Z" }],
+      },
+    });
+    expect(checkDedup("reply_to_tweet", "111", state)).not.toBeNull();
+    expect(checkDedup("reply_to_tweet", "222", state)).toBeNull(); // 222 is in liked, not replied_to
+    expect(checkDedup("like_tweet", "222", state)).not.toBeNull();
+    expect(checkDedup("retweet", "333", state)).not.toBeNull();
+    expect(checkDedup("quote_tweet", "444", state)).not.toBeNull();
+  });
+});
+
+describe("recordAction", () => {
+  it("increments reply counter", () => {
+    const state = makeState();
+    recordAction("reply_to_tweet", "123", state);
+    expect(state.budget.replies).toBe(1);
+    expect(state.budget.originals).toBe(0);
+  });
+
+  it("increments original counter for post_tweet", () => {
+    const state = makeState();
+    recordAction("post_tweet", null, state);
+    expect(state.budget.originals).toBe(1);
+  });
+
+  it("increments original counter for quote_tweet", () => {
+    const state = makeState();
+    recordAction("quote_tweet", "123", state);
+    expect(state.budget.originals).toBe(1);
+  });
+
+  it("increments like counter", () => {
+    const state = makeState();
+    recordAction("like_tweet", "123", state);
+    expect(state.budget.likes).toBe(1);
+  });
+
+  it("increments retweet counter", () => {
+    const state = makeState();
+    recordAction("retweet", "123", state);
+    expect(state.budget.retweets).toBe(1);
+  });
+
+  it("updates last_write_at for write actions", () => {
+    const state = makeState();
+    expect(state.last_write_at).toBeNull();
+    recordAction("reply_to_tweet", "123", state);
+    expect(state.last_write_at).not.toBeNull();
+    expect(state.last_write_at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  });
+
+  it("does not update anything for read-only tools", () => {
+    const state = makeState();
+    recordAction("get_tweet", null, state);
+    expect(state.budget.replies).toBe(0);
+    expect(state.budget.originals).toBe(0);
+    expect(state.last_write_at).toBeNull();
+  });
+
+  it("adds to dedup set for engagement tools", () => {
+    const state = makeState();
+    recordAction("like_tweet", "123", state);
+    expect(state.engaged.liked).toHaveLength(1);
+    expect(state.engaged.liked[0].tweet_id).toBe("123");
+    expect(state.engaged.liked[0].at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  });
+
+  it("adds to replied_to dedup set", () => {
+    const state = makeState();
+    recordAction("reply_to_tweet", "456", state);
+    expect(state.engaged.replied_to).toHaveLength(1);
+    expect(state.engaged.replied_to[0].tweet_id).toBe("456");
+  });
+
+  it("adds to quoted dedup set", () => {
+    const state = makeState();
+    recordAction("quote_tweet", "789", state);
+    expect(state.engaged.quoted).toHaveLength(1);
+    expect(state.engaged.quoted[0].tweet_id).toBe("789");
+  });
+});
+
+describe("getParameterHint", () => {
+  it("returns hint for reply_to_tweet_id on post_tweet", () => {
+    const hint = getParameterHint("post_tweet", "reply_to_tweet_id");
+    expect(hint).toBe("Use the 'reply_to_tweet' tool instead.");
+  });
+
+  it("returns hint for in_reply_to on post_tweet", () => {
+    expect(getParameterHint("post_tweet", "in_reply_to")).toBe("Use the 'reply_to_tweet' tool instead.");
+  });
+
+  it("returns hint for in_reply_to_status_id on post_tweet", () => {
+    expect(getParameterHint("post_tweet", "in_reply_to_status_id")).toBe("Use the 'reply_to_tweet' tool instead.");
+  });
+
+  it("returns hint for quote_tweet_id on post_tweet", () => {
+    expect(getParameterHint("post_tweet", "quote_tweet_id")).toBe("Use the 'quote_tweet' tool instead.");
+  });
+
+  it("returns null for unknown params on post_tweet", () => {
+    expect(getParameterHint("post_tweet", "random_param")).toBeNull();
+  });
+
+  it("returns null for tools not in hint map", () => {
+    expect(getParameterHint("get_tweet", "reply_to_tweet_id")).toBeNull();
+    expect(getParameterHint("like_tweet", "reply_to_tweet_id")).toBeNull();
+  });
+});

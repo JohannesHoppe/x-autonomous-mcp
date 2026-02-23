@@ -18,11 +18,23 @@ export function errorMessage(e: unknown): string {
   return String(e);
 }
 
+import { compactResponse } from "./compact.js";
+
 /**
  * Format API result and rate limit info as a JSON string for MCP responses.
  */
-export function formatResult(data: unknown, rateLimit: string): string {
-  const output: Record<string, unknown> = { data };
+export function formatResult(
+  data: unknown,
+  rateLimit: string,
+  budgetString?: string,
+  compact?: boolean,
+): string {
+  let processedData = data;
+  if (compact && data && typeof data === "object") {
+    processedData = compactResponse(data);
+  }
+  const output: Record<string, unknown> = { data: processedData };
   if (rateLimit) output.rate_limit = rateLimit;
+  if (budgetString) output.budget = budgetString;
   return JSON.stringify(output, null, 2);
 }

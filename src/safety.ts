@@ -1,0 +1,218 @@
+import type { StateFile, EngagedEntry } from "./state.js";
+
+// --- Action type classification ---
+
+type ActionType = "reply" | "original" | "like" | "retweet" | null;
+type DedupType = "replied_to" | "liked" | "retweeted" | "quoted" | null;
+
+const ACTION_MAP: Record<string, ActionType> = {
+  post_tweet: "original",
+  reply_to_tweet: "reply",
+  quote_tweet: "original",
+  like_tweet: "like",
+  retweet: "retweet",
+  delete_tweet: null,
+  get_tweet: null,
+  search_tweets: null,
+  get_user: null,
+  get_timeline: null,
+  get_mentions: null,
+  get_followers: null,
+  get_following: null,
+  upload_media: null,
+  get_metrics: null,
+};
+
+const DEDUP_MAP: Record<string, DedupType> = {
+  reply_to_tweet: "replied_to",
+  like_tweet: "liked",
+  retweet: "retweeted",
+  quote_tweet: "quoted",
+};
+
+// --- Budget configuration ---
+
+export interface BudgetConfig {
+  maxReplies: number;
+  maxOriginals: number;
+  maxLikes: number;
+  maxRetweets: number;
+}
+
+export function loadBudgetConfig(): BudgetConfig {
+  return {
+    maxReplies: parseLimit(process.env.X_MCP_MAX_REPLIES, 8),
+    maxOriginals: parseLimit(process.env.X_MCP_MAX_ORIGINALS, 2),
+    maxLikes: parseLimit(process.env.X_MCP_MAX_LIKES, 20),
+    maxRetweets: parseLimit(process.env.X_MCP_MAX_RETWEETS, 5),
+  };
+}
+
+function parseLimit(value: string | undefined, defaultValue: number): number {
+  if (value === undefined || value === "") return defaultValue;
+  const parsed = parseInt(value, 10);
+  return isNaN(parsed) ? defaultValue : parsed;
+}
+
+// --- Budget formatting ---
+
+export function formatBudgetString(state: StateFile, config: BudgetConfig): string {
+  const parts: string[] = [];
+
+  parts.push(formatCounter(state.budget.replies, config.maxReplies, "replies"));
+  parts.push(formatCounter(state.budget.originals, config.maxOriginals, "originals"));
+  parts.push(formatCounter(state.budget.likes, config.maxLikes, "likes"));
+  parts.push(formatCounter(state.budget.retweets, config.maxRetweets, "retweets"));
+
+  let result = parts.join(", ");
+
+  if (state.last_write_at) {
+    const ago = relativeTime(state.last_write_at);
+    result += ` | last action: ${ago}`;
+  }
+
+  return result;
+}
+
+function formatCounter(used: number, max: number, label: string): string {
+  if (max === -1) return `${used}/unlimited ${label}`;
+  if (max === 0) return `${used}/${max} ${label} (DISABLED)`;
+  if (used >= max) return `${used}/${max} ${label} (LIMIT REACHED)`;
+  return `${used}/${max} ${label}`;
+}
+
+function relativeTime(isoTimestamp: string): string {
+  const diff = Date.now() - new Date(isoTimestamp).getTime();
+  if (diff < 0) return "just now";
+  const seconds = Math.floor(diff / 1000);
+  if (seconds < 60) return `${seconds}s ago`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
+// --- Budget checks ---
+
+export function checkBudget(
+  toolName: string,
+  state: StateFile,
+  config: BudgetConfig,
+): string | null {
+  const action = ACTION_MAP[toolName] ?? null;
+  if (!action) return null; // Read-only tool, no budget needed
+
+  const { used, max, label } = getBudgetInfo(action, state, config);
+
+  if (max === 0) {
+    return `Daily ${label} are disabled (limit: 0). Remaining today: ${remainingSummary(state, config)}.`;
+  }
+
+  if (max !== -1 && used >= max) {
+    return `Daily ${label} limit reached (${used}/${max}). Try again tomorrow. Remaining today: ${remainingSummary(state, config)}.`;
+  }
+
+  return null;
+}
+
+function getBudgetInfo(
+  action: ActionType,
+  state: StateFile,
+  config: BudgetConfig,
+): { used: number; max: number; label: string } {
+  switch (action) {
+    case "reply":
+      return { used: state.budget.replies, max: config.maxReplies, label: "reply" };
+    case "original":
+      return { used: state.budget.originals, max: config.maxOriginals, label: "original" };
+    case "like":
+      return { used: state.budget.likes, max: config.maxLikes, label: "like" };
+    case "retweet":
+      return { used: state.budget.retweets, max: config.maxRetweets, label: "retweet" };
+    default:
+      return { used: 0, max: -1, label: "unknown" };
+  }
+}
+
+function remainingSummary(state: StateFile, config: BudgetConfig): string {
+  const parts: string[] = [];
+  parts.push(remainingPart(state.budget.replies, config.maxReplies, "replies"));
+  parts.push(remainingPart(state.budget.originals, config.maxOriginals, "originals"));
+  parts.push(remainingPart(state.budget.likes, config.maxLikes, "likes"));
+  parts.push(remainingPart(state.budget.retweets, config.maxRetweets, "retweets"));
+  return parts.join(", ");
+}
+
+function remainingPart(used: number, max: number, label: string): string {
+  if (max === -1) return `unlimited ${label}`;
+  if (max === 0) return `0 ${label}`;
+  return `${Math.max(0, max - used)} ${label}`;
+}
+
+// --- Dedup checks ---
+
+export function checkDedup(
+  toolName: string,
+  targetTweetId: string,
+  state: StateFile,
+): string | null {
+  const dedupType = DEDUP_MAP[toolName] ?? null;
+  if (!dedupType) return null;
+
+  const entries: EngagedEntry[] = state.engaged[dedupType];
+  const existing = entries.find((e) => e.tweet_id === targetTweetId);
+  if (existing) {
+    return `Already ${dedupType.replace("_", " ")} tweet ${targetTweetId} at ${existing.at}. Duplicate blocked.`;
+  }
+
+  return null;
+}
+
+// --- Record action ---
+
+export function recordAction(
+  toolName: string,
+  targetTweetId: string | null,
+  state: StateFile,
+): StateFile {
+  const action = ACTION_MAP[toolName] ?? null;
+  const now = new Date().toISOString();
+
+  // Increment budget counter
+  if (action === "reply") state.budget.replies++;
+  else if (action === "original") state.budget.originals++;
+  else if (action === "like") state.budget.likes++;
+  else if (action === "retweet") state.budget.retweets++;
+
+  // Update last_write_at for any write action
+  if (action) {
+    state.last_write_at = now;
+  }
+
+  // Add to dedup set
+  const dedupType = DEDUP_MAP[toolName] ?? null;
+  if (dedupType && targetTweetId) {
+    state.engaged[dedupType].push({ tweet_id: targetTweetId, at: now });
+  }
+
+  return state;
+}
+
+// --- Self-describing error hints ---
+
+const PARAMETER_HINTS: Record<string, Record<string, string>> = {
+  post_tweet: {
+    reply_to_tweet_id: "Use the 'reply_to_tweet' tool instead.",
+    in_reply_to: "Use the 'reply_to_tweet' tool instead.",
+    in_reply_to_tweet_id: "Use the 'reply_to_tweet' tool instead.",
+    in_reply_to_status_id: "Use the 'reply_to_tweet' tool instead.",
+    quote_tweet_id: "Use the 'quote_tweet' tool instead.",
+    quoted_tweet_id: "Use the 'quote_tweet' tool instead.",
+  },
+};
+
+export function getParameterHint(toolName: string, unknownKey: string): string | null {
+  return PARAMETER_HINTS[toolName]?.[unknownKey] ?? null;
+}
