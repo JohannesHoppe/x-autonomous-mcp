@@ -91,7 +91,6 @@ describe("compactUser", () => {
       id: "456",
       username: "testuser",
       name: "Test User",
-      verified: true,
       followers: 1000,
       following: 50,
       tweets: 500,
@@ -105,7 +104,6 @@ describe("compactUser", () => {
     expect(result.followers).toBe(0);
     expect(result.following).toBe(0);
     expect(result.tweets).toBe(0);
-    expect(result.verified).toBe(false);
     expect(result.bio).toBe("");
   });
 });

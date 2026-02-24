@@ -381,7 +381,6 @@ describe("frozen fixture: get-user-by-username", () => {
     expect(compacted.data.id).toBe("43859239");
     expect(compacted.data.username).toBe("JohannesHoppe");
     expect(compacted.data.name).toContain("Johannes Hoppe");
-    expect(compacted.data.verified).toBe(false);
     expect(compacted.data.followers).toBe(3158);
     expect(compacted.data.following).toBe(1982);
     expect(compacted.data.tweets).toBe(6652);
@@ -450,10 +449,12 @@ describe("frozen fixture: get-timeline", () => {
     expect(typeof tweet.replies).toBe("number");
     expect(typeof tweet.created_at).toBe("string");
 
-    // Meta should be preserved
+    // Meta should be preserved (compact strips newest_id/oldest_id)
     expect(compacted.meta).toBeDefined();
     expect(compacted.meta.result_count).toBe(fixture.meta.result_count);
     expect(compacted.meta.next_token).toBe(fixture.meta.next_token);
+    expect(compacted.meta.newest_id).toBeUndefined();
+    expect(compacted.meta.oldest_id).toBeUndefined();
   });
 
   it("all timeline tweets resolve author to @JohannesHoppe", () => {

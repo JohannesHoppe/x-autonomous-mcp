@@ -1,12 +1,12 @@
 # LLMs.md -- Setup Guide for AI Agents
 
-You are an AI agent helping a user set up the x-mcp server. This file contains everything you need to walk them through it. Follow these instructions in order.
+You are an AI agent helping a user set up the x-autonomous-mcp server. This file contains everything you need to walk them through it. Follow these instructions in order.
 
 ---
 
 ## What This Is
 
-x-mcp is an MCP (Model Context Protocol) server that connects AI agents to the X (Twitter) API. Once set up, you (the AI) will have access to 16 tools for posting tweets, reading timelines, searching, liking, retweeting, uploading media, and more.
+x-autonomous-mcp is an MCP (Model Context Protocol) server that connects AI agents to the X (Twitter) API with built-in safety rails for autonomous operation. Once set up, you (the AI) will have access to tools for posting tweets, reading timelines, searching, liking, retweeting, uploading media, and more — with daily budget limits, engagement deduplication, and compact responses to save your tokens.
 
 ## Prerequisites
 
@@ -42,7 +42,7 @@ The user needs 5 credentials from the X Developer Portal. Walk them through each
 3. If they don't have a developer account, they'll need to sign up (it's free for basic access)
 4. Once in the dashboard, go to **Apps** in the left sidebar
 5. Click **Create App**
-6. Enter any app name (e.g., `my-x-mcp`)
+6. Enter any app name (e.g., `my-x-autonomous`)
 7. After creation, they will see three credentials on screen:
    - **Consumer Key** (also called API Key) --> this is `X_API_KEY`
    - **Secret Key** (also called API Secret) --> this is `X_API_SECRET`

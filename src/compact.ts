@@ -13,7 +13,6 @@ export interface CompactUser {
   id: string;
   username: string;
   name: string;
-  verified: boolean;
   followers: number;
   following: number;
   tweets: number;
@@ -91,12 +90,21 @@ export function compactUser(user: UserLike): CompactUser {
     id: user.id ?? "",
     username: user.username ?? "",
     name: user.name ?? "",
-    verified: user.verified ?? false,
     followers: metrics?.followers_count ?? 0,
     following: metrics?.following_count ?? 0,
     tweets: metrics?.tweet_count ?? 0,
     bio: user.description ?? "",
   };
+}
+
+function compactMeta(meta: unknown): Record<string, unknown> | undefined {
+  if (!meta || typeof meta !== "object") return undefined;
+  const m = meta as Record<string, unknown>;
+  // Keep result_count and next_token, drop redundant newest_id/oldest_id
+  const result: Record<string, unknown> = {};
+  if (m.result_count !== undefined) result.result_count = m.result_count;
+  if (m.next_token) result.next_token = m.next_token;
+  return Object.keys(result).length > 0 ? result : undefined;
 }
 
 export function compactResponse(apiResponse: unknown): unknown {
@@ -105,7 +113,7 @@ export function compactResponse(apiResponse: unknown): unknown {
   const resp = apiResponse as Record<string, unknown>;
   const data = resp.data;
   const includes = resp.includes as Record<string, unknown[]> | undefined;
-  const meta = resp.meta;
+  const meta = compactMeta(resp.meta);
   const users = (includes?.users ?? []) as UserLike[];
 
   // Single tweet

@@ -51,5 +51,5 @@ export function formatResult(
 
   if (rateLimit) output.rate_limit = rateLimit;
   if (budgetString) output.budget = budgetString;
-  return JSON.stringify(output, null, 2);
+  return JSON.stringify(output);
 }
