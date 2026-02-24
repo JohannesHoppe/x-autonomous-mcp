@@ -46,6 +46,7 @@ const budgetConfig = loadBudgetConfig();
 const compactMode = process.env.X_MCP_COMPACT !== "false"; // default true
 const dedupEnabled = process.env.X_MCP_DEDUP !== "false"; // default true
 const dangerousEnabled = process.env.X_MCP_ENABLE_DANGEROUS === "true"; // default false
+const toonEnabled = process.env.X_MCP_TOON !== "false"; // default true
 
 // --- MCP server ---
 
@@ -111,7 +112,7 @@ function wrapHandler(
       // Format response with budget string and compact mode
       const budgetString = formatBudgetString(state, budgetConfig);
       return {
-        content: [{ type: "text", text: formatResult(result, rateLimit, budgetString, compactMode) }],
+        content: [{ type: "text", text: formatResult(result, rateLimit, budgetString, compactMode, toonEnabled) }],
       };
     } catch (e: unknown) {
       // Include budget in error responses when possible

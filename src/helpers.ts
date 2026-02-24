@@ -1,4 +1,5 @@
 import { compactResponse } from "./compact.js";
+import { encode } from "./toon.js";
 
 /**
  * Extract tweet ID from a URL or raw numeric ID string.
@@ -33,6 +34,7 @@ export function formatResult(
   rateLimit: string,
   budgetString?: string,
   compact?: boolean,
+  toon?: boolean,
 ): string {
   let output: Record<string, unknown>;
 
@@ -51,5 +53,6 @@ export function formatResult(
 
   if (rateLimit) output.rate_limit = rateLimit;
   if (budgetString) output.budget = budgetString;
+  if (toon) return encode(output);
   return JSON.stringify(output);
 }

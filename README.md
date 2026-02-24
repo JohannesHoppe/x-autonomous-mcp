@@ -1,8 +1,8 @@
 # x-autonomous-mcp
 
-An MCP (Model Context Protocol) server that gives AI agents full access to the X (Twitter) API — with built-in safety rails for autonomous operation. Post tweets, search, read timelines, like, retweet, upload media, all through natural language. Includes daily budget limits, engagement deduplication, compact responses (~80% token savings), and self-describing errors.
+An MCP (Model Context Protocol) server that gives AI agents full access to the X (Twitter) API — with built-in safety rails for autonomous operation. Post tweets, search, read timelines, like, retweet, upload media, all through natural language. Includes daily budget limits, engagement deduplication, compact TOON-encoded responses, and self-describing errors.
 
-Works with **Claude Code**, **Claude Desktop**, **OpenAI Codex**, **Cursor**, **Windsurf**, **Cline**, and any other MCP-compatible client.
+Works with **Claude Code**, **Claude Desktop**, **OpenAI Codex**, **OpenClaw (ClawdBot)**, **Cursor**, **Windsurf**, **Cline**, and any other MCP-compatible client.
 
 **If you're an LLM/AI agent helping a user set up this project, read [`LLMs.md`](./LLMs.md) for step-by-step instructions you can walk the user through.**
 
@@ -35,24 +35,26 @@ Every MCP response includes the remaining budget — reads and writes alike. The
 }
 ```
 
-### Compact responses (default on)
+### TOON-encoded responses (default on)
 
-Strips everything the LLM doesn't need (~80% token reduction per API call):
+Responses use [TOON (Token-Oriented Object Notation)](https://github.com/toon-format/toon) instead of JSON. For array-heavy responses (timelines, search results, followers), TOON declares field names once in a header and uses CSV-style rows — significantly fewer tokens than JSON:
 
-```json
-{
-  "id": "123",
-  "text": "Hello world",
-  "author": "@username",
-  "likes": 237,
-  "retweets": 5,
-  "replies": 12,
-  "is_reply_to": "456",
-  "created_at": "2026-02-23T13:34:36.000Z"
-}
+```
+data[2]{id,text,author,likes,retweets,replies,created_at}:
+  "123",Hello world,@foo,9,2,0,"2026-02-23T17:00:01.000Z"
+  "456",Another tweet,@foo,3,0,1,"2026-02-23T16:00:00.000Z"
+meta:
+  result_count: 2
+  next_token: abc
+rate_limit: 299/300 (900s)
+budget: "3/8 replies, 0/2 originals"
 ```
 
-Dropped: `entities`, `edit_history_tweet_ids`, `conversation_id`, `lang`, `annotations`, URL expansions, image metadata. Flattens `public_metrics` and resolves `author_id` to `@username`.
+Set `X_MCP_TOON=false` to get non-pretty JSON instead.
+
+### Compact responses (default on)
+
+Strips fields the LLM doesn't need. Dropped: `entities`, `edit_history_tweet_ids`, `conversation_id`, `lang`, `annotations`, URL expansions, image metadata. Flattens `public_metrics` and resolves `author_id` to `@username`.
 
 ### Engagement deduplication (default on)
 
@@ -218,6 +220,9 @@ X_MCP_MAX_REPLIES=8
 X_MCP_MAX_ORIGINALS=2
 X_MCP_MAX_LIKES=20
 X_MCP_MAX_RETWEETS=5
+
+# TOON encoding (default: true) — set to "false" for JSON
+X_MCP_TOON=true
 
 # Compact responses (default: true)
 X_MCP_COMPACT=true
@@ -422,6 +427,8 @@ The `search_tweets` tool supports X's full query language:
 ## Credits
 
 Based on [Infatoshi/x-mcp](https://github.com/Infatoshi/x-mcp) by [@Infatoshi](https://github.com/Infatoshi).
+
+TOON encoder vendored from [@toon-format/toon](https://github.com/toon-format/toon) (MIT, [Johann Schopplich](https://github.com/johannschopplich)).
 
 ## License
 
