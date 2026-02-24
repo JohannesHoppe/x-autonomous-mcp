@@ -153,7 +153,7 @@ describe("TOON encode", () => {
         ],
         meta: { result_count: 2, next_token: "abc" },
         x_rate_limit: "299/300 (900s)",
-        x_budget: "3/8 replies, 0/2 originals",
+        x_budget: "3/8 replies used, 0/2 originals used",
       };
 
       const result = encode(response);
@@ -170,7 +170,7 @@ describe("TOON encode", () => {
       expect(lines[5]).toBe("  next_token: abc");
       // Scalar fields (x_budget has commas, gets quoted)
       expect(lines[6]).toBe("x_rate_limit: 299/300 (900s)");
-      expect(lines[7]).toBe('x_budget: "3/8 replies, 0/2 originals"');
+      expect(lines[7]).toBe('x_budget: "3/8 replies used, 0/2 originals used"');
     });
 
     it("encodes a single tweet response", () => {

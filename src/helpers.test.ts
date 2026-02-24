@@ -64,8 +64,8 @@ describe("formatResult", () => {
   });
 
   it("includes x_budget string when provided", () => {
-    const result = JSON.parse(formatResult({ id: "1" }, "", "3/8 replies, 0/2 originals"));
-    expect(result.x_budget).toBe("3/8 replies, 0/2 originals");
+    const result = JSON.parse(formatResult({ id: "1" }, "", "3/8 replies used, 0/2 originals used"));
+    expect(result.x_budget).toBe("3/8 replies used, 0/2 originals used");
   });
 
   it("omits x_budget when undefined", () => {
@@ -117,9 +117,9 @@ describe("formatResult", () => {
       includes: { users: [{ id: "10", username: "u", name: "U" }] },
       meta: { result_count: 1, next_token: "abc" },
     };
-    const result = JSON.parse(formatResult(apiResponse, "", "3/8 replies", true));
+    const result = JSON.parse(formatResult(apiResponse, "", "3/8 replies used", true));
     expect(result.meta).toEqual({ result_count: 1, next_token: "abc" });
-    expect(result.x_budget).toBe("3/8 replies");
+    expect(result.x_budget).toBe("3/8 replies used");
     expect(result.data).toHaveLength(1);
     expect(result.data[0].author).toBe("@u");
   });
@@ -147,7 +147,7 @@ describe("formatResult", () => {
         users: [{ id: "456", username: "author", name: "Author" }],
       },
     };
-    const result = formatResult(apiResponse, "5/15", "3/8 replies", true, true);
+    const result = formatResult(apiResponse, "5/15", "3/8 replies used", true, true);
     // Should be TOON, not JSON
     expect(() => JSON.parse(result)).toThrow();
     // Compact fields should appear

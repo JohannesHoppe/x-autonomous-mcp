@@ -56,7 +56,7 @@ describe("formatBudgetString", () => {
       budget: { date: "2026-02-23", replies: 3, originals: 0, likes: 5, retweets: 1, follows: 2 },
     });
     const result = formatBudgetString(state, makeConfig());
-    expect(result).toBe("3/8 replies, 0/2 originals, 5/20 likes, 1/5 retweets, 2/10 follows");
+    expect(result).toBe("3/8 replies used, 0/2 originals used, 5/20 likes used, 1/5 retweets used, 2/10 follows used");
   });
 
   it("shows LIMIT REACHED for exhausted counters", () => {
@@ -64,8 +64,8 @@ describe("formatBudgetString", () => {
       budget: { date: "2026-02-23", replies: 8, originals: 2, likes: 20, retweets: 5 },
     });
     const result = formatBudgetString(state, makeConfig());
-    expect(result).toContain("8/8 replies (LIMIT REACHED)");
-    expect(result).toContain("2/2 originals (LIMIT REACHED)");
+    expect(result).toContain("8/8 replies used (LIMIT REACHED)");
+    expect(result).toContain("2/2 originals used (LIMIT REACHED)");
   });
 
   it("shows unlimited for -1 limits", () => {
@@ -73,7 +73,7 @@ describe("formatBudgetString", () => {
       budget: { date: "2026-02-23", replies: 3, originals: 0, likes: 0, retweets: 0 },
     });
     const result = formatBudgetString(state, makeConfig({ maxReplies: -1 }));
-    expect(result).toContain("3/unlimited replies");
+    expect(result).toContain("3/unlimited replies used");
   });
 
   it("shows DISABLED for 0 limits", () => {
@@ -81,7 +81,7 @@ describe("formatBudgetString", () => {
       budget: { date: "2026-02-23", replies: 0, originals: 0, likes: 0, retweets: 0 },
     });
     const result = formatBudgetString(state, makeConfig({ maxLikes: 0 }));
-    expect(result).toContain("0/0 likes (DISABLED)");
+    expect(result).toContain("0/0 likes used (DISABLED)");
   });
 
   it("includes relative time for last_write_at", () => {

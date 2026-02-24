@@ -323,19 +323,19 @@ Responses use TOON format by default (field names once in header, CSV-style rows
 
 **Tweet list** (get_timeline, search_tweets, get_mentions):
 ```
-data[2]{id,text,author,author_followers,author_ratio,likes,retweets,replies,is_reply_to,created_at}:
+data[2]{id,text,author,author_followers,author_follower_ratio,likes,retweets,replies,replied_to_id,created_at}:
   "1893660912",Build agents not wrappers,@karpathy,3940281,118.6,4521,312,89,null,"2026-02-23T17:00:01.000Z"
   "1893660913",Hot take: MCP is underrated,@swyx,98200,3.2,210,45,12,null,"2026-02-23T16:30:00.000Z"
 meta:
   result_count: 2
   next_token: abc123
 x_rate_limit: 299/300 (900s)
-x_budget: "3/8 replies, 0/2 originals, 5/20 likes, 1/5 retweets, 0/10 follows"
+x_budget: "3/8 replies used, 0/2 originals used, 5/20 likes used, 1/5 retweets used, 0/10 follows used"
 ```
 
 - `author_followers`: raw follower count
-- `author_ratio`: followers/following (precomputed, e.g., 118.6 means 118x more followers than following)
-- `is_reply_to`: tweet ID this is replying to, or `null` for standalone tweets
+- `author_follower_ratio`: followers/following (precomputed, e.g., 118.6 means 118x more followers than following)
+- `replied_to_id`: tweet ID this is replying to, or `null` for standalone tweets
 
 **Single tweet** (get_tweet):
 ```
@@ -344,14 +344,14 @@ data:
   text: Build agents not wrappers
   author: "@karpathy"
   author_followers: 3940281
-  author_ratio: 118.6
+  author_follower_ratio: 118.6
   likes: 4521
   retweets: 312
   replies: 89
-  is_reply_to: null
+  replied_to_id: null
   created_at: "2026-02-23T17:00:01.000Z"
 x_rate_limit: 299/300 (900s)
-x_budget: "3/8 replies, 0/2 originals, 5/20 likes, 1/5 retweets, 0/10 follows"
+x_budget: "3/8 replies used, 0/2 originals used, 5/20 likes used, 1/5 retweets used, 0/10 follows used"
 ```
 
 **User profile** (get_user):
@@ -365,7 +365,7 @@ data:
   tweets: 890
   bio: Building things with TypeScript and AI
 x_rate_limit: 299/300 (900s)
-x_budget: "0/8 replies, 0/2 originals, 0/20 likes, 0/5 retweets, 0/10 follows"
+x_budget: "0/8 replies used, 0/2 originals used, 0/20 likes used, 0/5 retweets used, 0/10 follows used"
 ```
 
 **User list** (get_followers, get_following, get_non_followers):
@@ -377,7 +377,7 @@ meta:
   result_count: 2
   next_token: def456
 x_rate_limit: 14/15 (900s)
-x_budget: "0/8 replies, 0/2 originals, 0/20 likes, 0/5 retweets, 0/10 follows"
+x_budget: "0/8 replies used, 0/2 originals used, 0/20 likes used, 0/5 retweets used, 0/10 follows used"
 ```
 
 **Write result** (post_tweet, reply_to_tweet, quote_tweet):
@@ -386,7 +386,7 @@ data:
   id: "1893661000"
   text: Hello world!
 x_rate_limit: 199/200 (900s)
-x_budget: "0/8 replies, 1/2 originals, 0/20 likes, 0/5 retweets, 0/10 follows | last action: 0s ago"
+x_budget: "0/8 replies used, 1/2 originals used, 0/20 likes used, 0/5 retweets used, 0/10 follows used | last action: 0s ago"
 ```
 
 **Engagement result** (like_tweet, retweet, follow_user):
@@ -394,7 +394,7 @@ x_budget: "0/8 replies, 1/2 originals, 0/20 likes, 0/5 retweets, 0/10 follows | 
 data:
   liked: true
 x_rate_limit: 199/200 (900s)
-x_budget: "0/8 replies, 0/2 originals, 1/20 likes, 0/5 retweets, 0/10 follows | last action: 0s ago"
+x_budget: "0/8 replies used, 0/2 originals used, 1/20 likes used, 0/5 retweets used, 0/10 follows used | last action: 0s ago"
 ```
 
 ## Common Patterns

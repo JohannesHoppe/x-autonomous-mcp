@@ -32,7 +32,7 @@ Every MCP response includes the remaining budget — reads and writes alike. The
 {
   "data": { "id": "123", "text": "..." },
   "x_rate_limit": "299/300 remaining, resets in 900s",
-  "x_budget": "3/8 replies, 0/2 originals, 5/20 likes, 1/5 retweets, 0/10 follows | last action: 3m ago"
+  "x_budget": "3/8 replies used, 0/2 originals used, 5/20 likes used, 1/5 retweets used, 0/10 follows used | last action: 3m ago"
 }
 ```
 
@@ -41,14 +41,14 @@ Every MCP response includes the remaining budget — reads and writes alike. The
 Responses use [TOON (Token-Oriented Object Notation)](https://github.com/toon-format/toon) instead of JSON. For array-heavy responses (timelines, search results, followers), TOON declares field names once in a header and uses CSV-style rows — significantly fewer tokens than JSON:
 
 ```
-data[2]{id,text,author,author_followers,author_ratio,likes,retweets,replies,is_reply_to,created_at}:
+data[2]{id,text,author,author_followers,author_follower_ratio,likes,retweets,replies,replied_to_id,created_at}:
   "123",Hello world,@foo,5200,2.1,9,2,0,null,"2026-02-23T17:00:01.000Z"
   "456",Another tweet,@foo,5200,2.1,3,0,1,null,"2026-02-23T16:00:00.000Z"
 meta:
   result_count: 2
   next_token: abc
 x_rate_limit: 299/300 (900s)
-x_budget: "3/8 replies, 0/2 originals, 5/20 likes, 1/5 retweets, 0/10 follows"
+x_budget: "3/8 replies used, 0/2 originals used, 5/20 likes used, 1/5 retweets used, 0/10 follows used"
 ```
 
 Set `X_MCP_TOON=false` to get non-pretty JSON instead.
@@ -61,9 +61,9 @@ Strips fields the LLM doesn't need. Dropped: `entities`, `edit_history_tweet_ids
 
 Never reply to, like, or retweet the same tweet twice. Permanently tracked — prevents spam reports from re-engaging the same tweet days later.
 
-### Self-describing errors with Levenshtein suggestions
+### Self-describing errors with typo suggestions
 
-Every tool validates parameters and returns actionable hints. Hardcoded redirects catch common mistakes, and Levenshtein distance suggests the closest valid parameter for typos:
+Every tool validates parameters and returns actionable hints. Hardcoded redirects catch common mistakes, and fuzzy matching suggests the closest valid parameter for typos:
 
 ```
 Unknown parameter 'reply_to_tweet_id': Use the 'reply_to_tweet' tool instead.
@@ -82,7 +82,7 @@ X_MCP_ENABLE_DANGEROUS=true   # Opt in to expose delete_tweet, unfollow_user.
 
 ### Unknown parameter detection
 
-All tools use `.passthrough()` Zod schemas so unknown parameters are caught by the MCP server (not silently stripped by Zod). Unknown keys trigger Levenshtein-based suggestions or hardcoded redirect hints — the LLM learns from its mistake instead of getting an opaque validation error.
+Unknown parameters are caught by the MCP server (not silently ignored). Unknown keys trigger fuzzy-matched suggestions or hardcoded redirect hints — the LLM learns from its mistake instead of getting an opaque validation error.
 
 ---
 
@@ -147,7 +147,7 @@ get_timeline user="43859239"
 Accepts tweet URLs or IDs interchangeably -- paste `https://x.com/user/status/123` or just `123`.
 Accepts usernames with or without `@`, or numeric user IDs -- `@JohannesHoppe`, `JohannesHoppe`, or `43859239`.
 
-Search results and timeline tweets include **`author_followers`** (raw count) and **`author_ratio`** (followers/following, precomputed) so you can evaluate engagement quality without burning tokens on arithmetic.
+Search results and timeline tweets include **`author_followers`** (raw count) and **`author_follower_ratio`** (followers/following ratio, precomputed) so you can evaluate engagement quality without burning tokens on arithmetic.
 
 ---
 
@@ -158,7 +158,7 @@ Every response includes `x_rate_limit` and `x_budget` fields. Array endpoints us
 ### get_timeline / search_tweets / get_mentions
 
 ```
-data[3]{id,text,author,author_followers,author_ratio,likes,retweets,replies,is_reply_to,created_at}:
+data[3]{id,text,author,author_followers,author_follower_ratio,likes,retweets,replies,replied_to_id,created_at}:
   "1893660912",Build agents not wrappers,@karpathy,3940281,118.6,4521,312,89,null,"2026-02-23T17:00:01.000Z"
   "1893660913",Hot take: MCP is underrated,@swyx,98200,3.2,210,45,12,null,"2026-02-23T16:30:00.000Z"
   "1893660914",Agreed!,@johndoe,1500,0.8,3,0,0,"1893660913","2026-02-23T16:45:00.000Z"
@@ -166,10 +166,10 @@ meta:
   result_count: 3
   next_token: abc123
 x_rate_limit: 299/300 (900s)
-x_budget: "3/8 replies, 0/2 originals, 5/20 likes, 1/5 retweets, 0/10 follows | last action: 3m ago"
+x_budget: "3/8 replies used, 0/2 originals used, 5/20 likes used, 1/5 retweets used, 0/10 follows used | last action: 3m ago"
 ```
 
-Compact tweets include `author_followers` (raw count) and `author_ratio` (followers/following, precomputed). `is_reply_to` is `null` for standalone tweets, or a tweet ID for replies.
+Compact tweets include `author_followers` (raw count) and `author_follower_ratio` (followers/following ratio, precomputed). `replied_to_id` is the tweet ID this is replying to, or `null` for standalone tweets.
 
 ### get_tweet
 
@@ -179,14 +179,14 @@ data:
   text: Build agents not wrappers
   author: "@karpathy"
   author_followers: 3940281
-  author_ratio: 118.6
+  author_follower_ratio: 118.6
   likes: 4521
   retweets: 312
   replies: 89
-  is_reply_to: null
+  replied_to_id: null
   created_at: "2026-02-23T17:00:01.000Z"
 x_rate_limit: 299/300 (900s)
-x_budget: "3/8 replies, 0/2 originals, 5/20 likes, 1/5 retweets, 0/10 follows"
+x_budget: "3/8 replies used, 0/2 originals used, 5/20 likes used, 1/5 retweets used, 0/10 follows used"
 ```
 
 ### get_user
@@ -201,7 +201,7 @@ data:
   tweets: 890
   bio: Building things with TypeScript and AI
 x_rate_limit: 299/300 (900s)
-x_budget: "0/8 replies, 0/2 originals, 0/20 likes, 0/5 retweets, 0/10 follows"
+x_budget: "0/8 replies used, 0/2 originals used, 0/20 likes used, 0/5 retweets used, 0/10 follows used"
 ```
 
 ### get_followers / get_following
@@ -214,7 +214,7 @@ meta:
   result_count: 2
   next_token: def456
 x_rate_limit: 14/15 (900s)
-x_budget: "0/8 replies, 0/2 originals, 0/20 likes, 0/5 retweets, 0/10 follows"
+x_budget: "0/8 replies used, 0/2 originals used, 0/20 likes used, 0/5 retweets used, 0/10 follows used"
 ```
 
 ### get_non_followers
@@ -227,7 +227,7 @@ total_following: 567
 total_followers: 1234
 non_followers_count: 2
 x_rate_limit: 14/15 (900s)
-x_budget: "0/8 replies, 0/2 originals, 0/20 likes, 0/5 retweets, 0/10 follows"
+x_budget: "0/8 replies used, 0/2 originals used, 0/20 likes used, 0/5 retweets used, 0/10 follows used"
 ```
 
 Sorted by follower count ascending (lowest quality first = best unfollow candidates).
@@ -239,7 +239,7 @@ data:
   id: "1893661000"
   text: Hello world!
 x_rate_limit: 199/200 (900s)
-x_budget: "0/8 replies, 1/2 originals, 0/20 likes, 0/5 retweets, 0/10 follows | last action: 0s ago"
+x_budget: "0/8 replies used, 1/2 originals used, 0/20 likes used, 0/5 retweets used, 0/10 follows used | last action: 0s ago"
 ```
 
 ### like_tweet / retweet / follow_user
@@ -248,7 +248,7 @@ x_budget: "0/8 replies, 1/2 originals, 0/20 likes, 0/5 retweets, 0/10 follows | 
 data:
   liked: true
 x_rate_limit: 199/200 (900s)
-x_budget: "0/8 replies, 0/2 originals, 1/20 likes, 0/5 retweets, 0/10 follows | last action: 0s ago"
+x_budget: "0/8 replies used, 0/2 originals used, 1/20 likes used, 0/5 retweets used, 0/10 follows used | last action: 0s ago"
 ```
 
 ### get_metrics
@@ -265,7 +265,7 @@ data:
     bookmark_count: 156
     impression_count: 892340
 x_rate_limit: 299/300 (900s)
-x_budget: "0/8 replies, 0/2 originals, 0/20 likes, 0/5 retweets, 0/10 follows"
+x_budget: "0/8 replies used, 0/2 originals used, 0/20 likes used, 0/5 retweets used, 0/10 follows used"
 ```
 
 ### upload_media
@@ -274,7 +274,7 @@ x_budget: "0/8 replies, 0/2 originals, 0/20 likes, 0/5 retweets, 0/10 follows"
 media_id: "1893670001"
 message: Upload complete. Use this media_id in post_tweet.
 x_rate_limit: 299/300 (900s)
-x_budget: "0/8 replies, 0/2 originals, 0/20 likes, 0/5 retweets, 0/10 follows"
+x_budget: "0/8 replies used, 0/2 originals used, 0/20 likes used, 0/5 retweets used, 0/10 follows used"
 ```
 
 ### Error responses
@@ -283,14 +283,14 @@ Budget exhausted:
 ```
 Error: Daily reply limit reached (8/8). Try again tomorrow. Remaining today: 0 replies, 2 originals, 15 likes, 5 retweets, 10 follows.
 
-Current x_budget: 8/8 replies (LIMIT REACHED), 0/2 originals, 5/20 likes, 0/5 retweets, 0/10 follows
+Current x_budget: 8/8 replies used (LIMIT REACHED), 0/2 originals used, 5/20 likes used, 0/5 retweets used, 0/10 follows used
 ```
 
 Duplicate engagement:
 ```
 Error: Already liked tweet 1893660912 at 2026-02-23T10:00:00.000Z. Duplicate blocked.
 
-Current x_budget: 3/8 replies, 0/2 originals, 5/20 likes, 1/5 retweets, 0/10 follows
+Current x_budget: 3/8 replies used, 0/2 originals used, 5/20 likes used, 1/5 retweets used, 0/10 follows used
 ```
 
 Unknown parameter:
@@ -299,7 +299,7 @@ Error: Unknown parameter 'poll_option': Did you mean 'poll_options'?
 
 Valid parameters for post_tweet: text, poll_options, poll_duration_minutes, media_ids
 
-Current x_budget: 0/8 replies, 0/2 originals, 0/20 likes, 0/5 retweets, 0/10 follows
+Current x_budget: 0/8 replies used, 0/2 originals used, 0/20 likes used, 0/5 retweets used, 0/10 follows used
 ```
 
 ---

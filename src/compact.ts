@@ -3,11 +3,11 @@ export interface CompactTweet {
   text: string;
   author: string;
   author_followers: number;
-  author_ratio: number;
+  author_follower_ratio: number;
   likes: number;
   retweets: number;
   replies: number;
-  is_reply_to: string | null;
+  replied_to_id: string | null;
   created_at: string;
 }
 
@@ -81,11 +81,11 @@ export function compactTweet(tweet: TweetLike, users: UserLike[]): CompactTweet 
     text: tweet.text ?? "",
     author: author?.username ? `@${author.username}` : (tweet.author_id ?? "unknown"),
     author_followers: authorFollowers,
-    author_ratio: author ? followerRatio(authorFollowers, authorFollowing) : 0,
+    author_follower_ratio: author ? followerRatio(authorFollowers, authorFollowing) : 0,
     likes: metrics?.like_count ?? 0,
     retweets: metrics?.retweet_count ?? 0,
     replies: metrics?.reply_count ?? 0,
-    is_reply_to: repliedTo?.id ?? null,
+    replied_to_id: repliedTo?.id ?? null,
     created_at: tweet.created_at ?? "",
   };
 }

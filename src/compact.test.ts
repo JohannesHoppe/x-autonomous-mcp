@@ -23,16 +23,16 @@ describe("compactTweet", () => {
       text: "Hello world",
       author: "@testuser",
       author_followers: 1000,
-      author_ratio: 10,
+      author_follower_ratio: 10,
       likes: 10,
       retweets: 5,
       replies: 2,
-      is_reply_to: null,
+      replied_to_id: null,
       created_at: "2026-02-23T13:34:36.000Z",
     });
   });
 
-  it("maps referenced_tweets replied_to to is_reply_to", () => {
+  it("maps referenced_tweets replied_to to replied_to_id", () => {
     const tweet = {
       id: "200",
       text: "replying",
@@ -43,10 +43,10 @@ describe("compactTweet", () => {
     };
 
     const result = compactTweet(tweet, []);
-    expect(result.is_reply_to).toBe("100");
+    expect(result.replied_to_id).toBe("100");
   });
 
-  it("sets is_reply_to to null for non-replies", () => {
+  it("sets replied_to_id to null for non-replies", () => {
     const tweet = {
       id: "201",
       text: "not a reply",
@@ -56,7 +56,7 @@ describe("compactTweet", () => {
     };
 
     const result = compactTweet(tweet, []);
-    expect(result.is_reply_to).toBeNull();
+    expect(result.replied_to_id).toBeNull();
   });
 
   it("uses author_id as fallback when user not in includes", () => {
@@ -71,7 +71,7 @@ describe("compactTweet", () => {
     const result = compactTweet(tweet, []);
     expect(result.author).toBe("999");
     expect(result.author_followers).toBe(0);
-    expect(result.author_ratio).toBe(0);
+    expect(result.author_follower_ratio).toBe(0);
   });
 
   it("defaults missing metrics to 0", () => {
@@ -86,10 +86,10 @@ describe("compactTweet", () => {
     expect(result.retweets).toBe(0);
     expect(result.replies).toBe(0);
     expect(result.author_followers).toBe(0);
-    expect(result.author_ratio).toBe(0);
+    expect(result.author_follower_ratio).toBe(0);
   });
 
-  it("computes author_ratio correctly", () => {
+  it("computes author_follower_ratio correctly", () => {
     const tweet = {
       id: "500",
       text: "ratio test",
@@ -100,15 +100,15 @@ describe("compactTweet", () => {
 
     // 1000/100 = ratio 10
     const users1 = [{ id: "456", username: "u", name: "U", public_metrics: { followers_count: 1000, following_count: 100, tweet_count: 0 } }];
-    expect(compactTweet(tweet, users1).author_ratio).toBe(10);
+    expect(compactTweet(tweet, users1).author_follower_ratio).toBe(10);
 
     // 100/1000 = ratio 0.1
     const users2 = [{ id: "456", username: "u", name: "U", public_metrics: { followers_count: 100, following_count: 1000, tweet_count: 0 } }];
-    expect(compactTweet(tweet, users2).author_ratio).toBe(0.1);
+    expect(compactTweet(tweet, users2).author_follower_ratio).toBe(0.1);
 
     // follows nobody → ratio = follower count
     const users3 = [{ id: "456", username: "u", name: "U", public_metrics: { followers_count: 5000, following_count: 0, tweet_count: 0 } }];
-    expect(compactTweet(tweet, users3).author_ratio).toBe(5000);
+    expect(compactTweet(tweet, users3).author_follower_ratio).toBe(5000);
   });
 });
 
@@ -275,7 +275,7 @@ describe("compactResponse", () => {
     const data = result.data as Record<string, unknown>;
     expect(data.author).toBe("456"); // falls back to author_id
     expect(data.author_followers).toBe(0);
-    expect(data.author_ratio).toBe(0);
+    expect(data.author_follower_ratio).toBe(0);
   });
 
   it("drops meta fields other than result_count and next_token", () => {
@@ -326,6 +326,6 @@ describe("compactResponse", () => {
     const data = result.data as Record<string, unknown>;
     expect(data.author).toBe("@nometrics");
     expect(data.author_followers).toBe(0);
-    expect(data.author_ratio).toBe(0);
+    expect(data.author_follower_ratio).toBe(0);
   });
 });

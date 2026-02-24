@@ -112,7 +112,7 @@ function wrapHandler(
           const state = loadState(statePath);
           const budgetString = formatBudgetString(state, budgetConfig);
           return {
-            content: [{ type: "text", text: `Error: ${hints}\n\nValid parameters for ${toolName}: ${validKeys.join(", ")}\n\nCurrent budget: ${budgetString}` }],
+            content: [{ type: "text", text: `Error: ${hints}\n\nValid parameters for ${toolName}: ${validKeys.join(", ")}\n\nCurrent x_budget: ${budgetString}` }],
             isError: true,
           };
         }
@@ -125,7 +125,7 @@ function wrapHandler(
       if (budgetError) {
         const budgetString = formatBudgetString(state, budgetConfig);
         return {
-          content: [{ type: "text", text: `Error: ${budgetError}\n\nCurrent budget: ${budgetString}` }],
+          content: [{ type: "text", text: `Error: ${budgetError}\n\nCurrent x_budget: ${budgetString}` }],
           isError: true,
         };
       }
@@ -137,7 +137,7 @@ function wrapHandler(
         if (dedupError) {
           const budgetString = formatBudgetString(state, budgetConfig);
           return {
-            content: [{ type: "text", text: `Error: ${dedupError}\n\nCurrent budget: ${budgetString}` }],
+            content: [{ type: "text", text: `Error: ${dedupError}\n\nCurrent x_budget: ${budgetString}` }],
             isError: true,
           };
         }
@@ -163,7 +163,7 @@ function wrapHandler(
         const state = loadState(statePath);
         const budgetString = formatBudgetString(state, budgetConfig);
         return {
-          content: [{ type: "text", text: `Error: ${errorMessage(e)}\n\nCurrent budget: ${budgetString}` }],
+          content: [{ type: "text", text: `Error: ${errorMessage(e)}\n\nCurrent x_budget: ${budgetString}` }],
           isError: true,
         };
       } catch {
@@ -320,7 +320,7 @@ server.registerTool(
     if (!args.username && !args.user_id) {
       const state = loadState(statePath);
       const budgetString = formatBudgetString(state, budgetConfig);
-      return { content: [{ type: "text" as const, text: `Error: Provide either username or user_id\n\nCurrent budget: ${budgetString}` }], isError: true };
+      return { content: [{ type: "text" as const, text: `Error: Provide either username or user_id\n\nCurrent x_budget: ${budgetString}` }], isError: true };
     }
     return wrapHandler("get_user", async (a) => {
       return client.getUser({

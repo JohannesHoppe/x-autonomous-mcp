@@ -81,10 +81,10 @@ export function formatBudgetString(state: StateFile, config: BudgetConfig): stri
 }
 
 function formatCounter(used: number, max: number, label: string): string {
-  if (max === -1) return `${used}/unlimited ${label}`;
-  if (max === 0) return `${used}/${max} ${label} (DISABLED)`;
-  if (used >= max) return `${used}/${max} ${label} (LIMIT REACHED)`;
-  return `${used}/${max} ${label}`;
+  if (max === -1) return `${used}/unlimited ${label} used`;
+  if (max === 0) return `${used}/${max} ${label} used (DISABLED)`;
+  if (used >= max) return `${used}/${max} ${label} used (LIMIT REACHED)`;
+  return `${used}/${max} ${label} used`;
 }
 
 function relativeTime(isoTimestamp: string): string {
