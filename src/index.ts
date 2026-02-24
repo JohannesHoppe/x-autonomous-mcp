@@ -158,7 +158,7 @@ server.registerTool(
     if (unknownKeys.length > 0) {
       const hints = unknownKeys
         .map((k) => {
-          const hint = getParameterHint("post_tweet", k);
+          const hint = getParameterHint("post_tweet", k, POST_TWEET_VALID_KEYS);
           return hint ? `Unknown parameter '${k}': ${hint}` : `Unknown parameter '${k}'.`;
         })
         .join("\n");

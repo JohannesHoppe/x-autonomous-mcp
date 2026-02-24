@@ -289,13 +289,31 @@ describe("getParameterHint", () => {
     expect(getParameterHint("post_tweet", "quote_tweet_id")).toBe("Use the 'quote_tweet' tool instead.");
   });
 
-  it("returns null for unknown params on post_tweet", () => {
+  it("returns null for unknown params on post_tweet without valid keys", () => {
     expect(getParameterHint("post_tweet", "random_param")).toBeNull();
   });
 
   it("returns null for tools not in hint map", () => {
     expect(getParameterHint("get_tweet", "reply_to_tweet_id")).toBeNull();
     expect(getParameterHint("like_tweet", "reply_to_tweet_id")).toBeNull();
+  });
+
+  // Levenshtein distance suggestions
+  const VALID_KEYS = ["text", "poll_options", "poll_duration_minutes", "media_ids"];
+
+  it("suggests closest valid parameter for typos", () => {
+    expect(getParameterHint("post_tweet", "poll_option", VALID_KEYS)).toBe("Did you mean 'poll_options'?");
+    expect(getParameterHint("post_tweet", "media_id", VALID_KEYS)).toBe("Did you mean 'media_ids'?");
+    expect(getParameterHint("post_tweet", "texts", VALID_KEYS)).toBe("Did you mean 'text'?");
+  });
+
+  it("prefers hardcoded hint over Levenshtein suggestion", () => {
+    // "in_reply_to" has a hardcoded hint, should not get a Levenshtein suggestion
+    expect(getParameterHint("post_tweet", "in_reply_to", VALID_KEYS)).toBe("Use the 'reply_to_tweet' tool instead.");
+  });
+
+  it("returns null for completely unrelated parameter names", () => {
+    expect(getParameterHint("post_tweet", "completely_unrelated_garbage_param", VALID_KEYS)).toBeNull();
   });
 });
 

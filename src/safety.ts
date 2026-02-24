@@ -217,6 +217,44 @@ const PARAMETER_HINTS: Record<string, Record<string, string>> = {
   },
 };
 
-export function getParameterHint(toolName: string, unknownKey: string): string | null {
-  return PARAMETER_HINTS[toolName]?.[unknownKey] ?? null;
+function levenshtein(a: string, b: string): number {
+  const m = a.length, n = b.length;
+  const dp: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      dp[i][j] = a[i - 1] === b[j - 1]
+        ? dp[i - 1][j - 1]
+        : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+    }
+  }
+  return dp[m][n];
+}
+
+function closestMatch(input: string, candidates: string[], maxDistance = 3): string | null {
+  let best: string | null = null;
+  let bestDist = maxDistance + 1;
+  for (const candidate of candidates) {
+    const dist = levenshtein(input.toLowerCase(), candidate.toLowerCase());
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = candidate;
+    }
+  }
+  return best;
+}
+
+export function getParameterHint(toolName: string, unknownKey: string, validKeys?: string[]): string | null {
+  // Check hardcoded hints first (e.g., "use reply_to_tweet tool instead")
+  const hint = PARAMETER_HINTS[toolName]?.[unknownKey];
+  if (hint) return hint;
+
+  // Fall back to Levenshtein distance suggestion
+  if (validKeys && validKeys.length > 0) {
+    const suggestion = closestMatch(unknownKey, validKeys);
+    if (suggestion) return `Did you mean '${suggestion}'?`;
+  }
+
+  return null;
 }
