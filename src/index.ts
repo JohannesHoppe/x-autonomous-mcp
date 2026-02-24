@@ -92,7 +92,7 @@ const VALID_KEYS: Record<string, string[]> = {
   get_followed_lists: ["max_results", "next_token"],
   get_next_task: [],
   submit_task: ["workflow_id", "response"],
-  start_workflow: ["type", "target"],
+  start_workflow: ["type", "target", "reply_tweet_id"],
   get_workflow_status: ["type", "include_completed"],
   cleanup_non_followers: ["max_unfollow", "max_pages"],
 };
@@ -468,9 +468,8 @@ server.registerTool(
       user: z.string().describe("Username (with or without @) or numeric user ID"),
     }).passthrough(),
   },
-  wrapHandler("follow_user", async (args) => {
-    const userId = await client.resolveUserId(args.user as string);
-    return client.followUser(userId);
+  wrapHandler("follow_user", async (_args, resolvedId) => {
+    return client.followUser(resolvedId!);
   }, { getTargetTweetId: async (args) => {
     // Reuse dedup system — "tweet_id" slot holds user_id for follow dedup
     return client.resolveUserId(args.user as string);
@@ -757,10 +756,11 @@ server.registerTool(
 server.registerTool(
   "start_workflow",
   {
-    description: "Begin a new workflow. For follow_cycle: auto-follows, likes pinned, fetches timeline, then returns reply prompt. For reply_track: creates a tracking entry for a reply already posted.",
+    description: "Begin a new workflow. For follow_cycle: auto-follows, likes pinned, fetches timeline, then returns reply prompt. For reply_track: creates a tracking entry for a reply already posted (requires reply_tweet_id).",
     inputSchema: z.object({
       type: z.enum(["follow_cycle", "reply_track"]).describe("Workflow type"),
       target: z.string().describe("Target username (with or without @) or numeric user ID"),
+      reply_tweet_id: z.string().optional().describe("Tweet ID of the reply being tracked (required for reply_track)"),
     }).passthrough(),
   },
   async (args) => {
@@ -768,9 +768,32 @@ server.registerTool(
       const state = loadState(statePath);
       const targetRef = args.target as string;
       const userId = await client.resolveUserId(targetRef);
-      const username = targetRef.replace(/^@/, "");
+      // Resolve actual username — don't store numeric ID as username
+      let username: string;
+      if (/^\d+$/.test(targetRef)) {
+        const { result } = await client.getUser({ userId: targetRef });
+        const data = result as { data?: { username?: string } };
+        username = data.data?.username ?? targetRef;
+      } else {
+        username = targetRef.replace(/^@/, "");
+      }
 
-      const { error } = createWorkflow(state, args.type as string, userId, username);
+      // Build initial context for reply_track
+      const workflowType = args.type as string;
+      let initialContext: Record<string, string> | undefined;
+      if (workflowType === "reply_track") {
+        const replyTweetId = args.reply_tweet_id as string | undefined;
+        if (!replyTweetId) {
+          const budgetString = formatBudgetString(state, budgetConfig);
+          return {
+            content: [{ type: "text" as const, text: `Error: reply_track requires reply_tweet_id parameter.\n\nCurrent x_budget: ${budgetString}` }],
+            isError: true,
+          };
+        }
+        initialContext = { reply_tweet_id: replyTweetId };
+      }
+
+      const { error } = createWorkflow(state, workflowType, userId, username, initialContext);
       if (error) {
         const budgetString = formatBudgetString(state, budgetConfig);
         return {
@@ -785,7 +808,7 @@ server.registerTool(
 
       const budgetString = formatBudgetString(state, budgetConfig);
       const output: Record<string, unknown> = {
-        result: `Workflow ${args.type} started for @${username}.`,
+        result: `Workflow ${workflowType} started for @${username}.`,
       };
       if (result.auto_completed.length > 0) {
         output.auto_completed = result.auto_completed.join("\n");

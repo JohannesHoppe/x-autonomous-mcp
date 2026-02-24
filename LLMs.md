@@ -313,7 +313,7 @@ Once connected, you have access to these tools (prefixed with `mcp__x-twitter__`
 ### Workflows
 - **get_next_task** -- MUST call at session start. Auto-processes pending work, returns next assignment.
 - **submit_task** -- Submit response to MCP request. Parameters: `workflow_id`, `response`
-- **start_workflow** -- Begin workflow. Parameters: `type` (follow_cycle, reply_track), `target`
+- **start_workflow** -- Begin workflow. Parameters: `type` (follow_cycle, reply_track), `target`, `reply_tweet_id` (required for reply_track)
 - **get_workflow_status** -- Show workflows. Parameters: `type` (optional filter), `include_completed`
 - **cleanup_non_followers** -- Batch-unfollow non-followers. Parameters: `max_unfollow`, `max_pages`
 
@@ -348,7 +348,7 @@ meta:
   result_count: 2
   next_token: abc123
 x_rate_limit: 299/300 (900s)
-x_budget: "3/8 replies used, 0/2 originals used, 5/20 likes used, 1/5 retweets used, 0/10 follows used"
+x_budget: "3/8 replies used, 0/2 originals used, 5/20 likes used, 1/5 retweets used, 0/10 follows used, 0/10 unfollows used, 0/5 deletes used"
 ```
 
 - `author_followers`: raw follower count
@@ -369,7 +369,7 @@ data:
   replied_to_id: null
   created_at: "2026-02-23T17:00:01.000Z"
 x_rate_limit: 299/300 (900s)
-x_budget: "3/8 replies used, 0/2 originals used, 5/20 likes used, 1/5 retweets used, 0/10 follows used"
+x_budget: "3/8 replies used, 0/2 originals used, 5/20 likes used, 1/5 retweets used, 0/10 follows used, 0/10 unfollows used, 0/5 deletes used"
 ```
 
 **User profile** (get_user):
@@ -382,20 +382,21 @@ data:
   following: 567
   tweets: 890
   bio: Building things with TypeScript and AI
+  pinned_tweet_id: "1893650001"
 x_rate_limit: 299/300 (900s)
-x_budget: "0/8 replies used, 0/2 originals used, 0/20 likes used, 0/5 retweets used, 0/10 follows used"
+x_budget: "0/8 replies used, 0/2 originals used, 0/20 likes used, 0/5 retweets used, 0/10 follows used, 0/10 unfollows used, 0/5 deletes used"
 ```
 
 **User list** (get_followers, get_following, get_non_followers):
 ```
-data[2]{id,username,name,followers,following,tweets,bio}:
-  "123456",alice_dev,Alice,8900,450,1200,Full-stack engineer
-  "789012",bob_ai,Bob,340,120,890,ML researcher
+data[2]{id,username,name,followers,following,tweets,bio,pinned_tweet_id}:
+  "123456",alice_dev,Alice,8900,450,1200,Full-stack engineer,"1893650100"
+  "789012",bob_ai,Bob,340,120,890,ML researcher,null
 meta:
   result_count: 2
   next_token: def456
 x_rate_limit: 14/15 (900s)
-x_budget: "0/8 replies used, 0/2 originals used, 0/20 likes used, 0/5 retweets used, 0/10 follows used"
+x_budget: "0/8 replies used, 0/2 originals used, 0/20 likes used, 0/5 retweets used, 0/10 follows used, 0/10 unfollows used, 0/5 deletes used"
 ```
 
 **Write result** (post_tweet, reply_to_tweet, quote_tweet):
@@ -404,7 +405,7 @@ data:
   id: "1893661000"
   text: Hello world!
 x_rate_limit: 199/200 (900s)
-x_budget: "0/8 replies used, 1/2 originals used, 0/20 likes used, 0/5 retweets used, 0/10 follows used | last action: 0s ago"
+x_budget: "0/8 replies used, 1/2 originals used, 0/20 likes used, 0/5 retweets used, 0/10 follows used, 0/10 unfollows used, 0/5 deletes used | last action: 0s ago"
 ```
 
 **Engagement result** (like_tweet, retweet, follow_user):
@@ -412,7 +413,7 @@ x_budget: "0/8 replies used, 1/2 originals used, 0/20 likes used, 0/5 retweets u
 data:
   liked: true
 x_rate_limit: 199/200 (900s)
-x_budget: "0/8 replies used, 0/2 originals used, 1/20 likes used, 0/5 retweets used, 0/10 follows used | last action: 0s ago"
+x_budget: "0/8 replies used, 0/2 originals used, 1/20 likes used, 0/5 retweets used, 0/10 follows used, 0/10 unfollows used, 0/5 deletes used | last action: 0s ago"
 ```
 
 ## Common Patterns
@@ -460,7 +461,7 @@ If you get distracted, just call `get_next_task` — it picks up where you left 
 
 - **get_next_task** — MUST be called at start of every session. Auto-processes all pending work, returns your next assignment.
 - **submit_task** — Submit your response to the MCP's request. Parameters: `workflow_id`, `response` (e.g. `{ reply_text: "..." }`)
-- **start_workflow** — Begin a new workflow. Parameters: `type` (follow_cycle, reply_track), `target` (username or ID)
+- **start_workflow** — Begin a new workflow. Parameters: `type` (follow_cycle, reply_track), `target` (username or ID), `reply_tweet_id` (required for reply_track)
 - **get_workflow_status** — Show all workflows. Parameters: `type` (optional filter), `include_completed` (default false)
 - **cleanup_non_followers** — Batch-unfollow non-followers. Parameters: `max_unfollow` (default 10), `max_pages` (default 5)
 

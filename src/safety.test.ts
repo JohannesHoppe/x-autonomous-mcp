@@ -209,6 +209,7 @@ describe("checkDedup", () => {
         liked: [{ tweet_id: "123", at: "2026-02-23T10:00:00.000Z" }],
         retweeted: [],
         quoted: [],
+        followed: [],
       },
     });
     const result = checkDedup("like_tweet", "123", state);
@@ -229,6 +230,7 @@ describe("checkDedup", () => {
         liked: [{ tweet_id: "222", at: "2026-02-23T10:00:00.000Z" }],
         retweeted: [{ tweet_id: "333", at: "2026-02-23T10:00:00.000Z" }],
         quoted: [{ tweet_id: "444", at: "2026-02-23T10:00:00.000Z" }],
+        followed: [],
       },
     });
     expect(checkDedup("reply_to_tweet", "111", state)).not.toBeNull();
@@ -236,6 +238,26 @@ describe("checkDedup", () => {
     expect(checkDedup("like_tweet", "222", state)).not.toBeNull();
     expect(checkDedup("retweet", "333", state)).not.toBeNull();
     expect(checkDedup("quote_tweet", "444", state)).not.toBeNull();
+  });
+
+  it("detects duplicate follow_user via followed dedup set", () => {
+    const state = makeState({
+      engaged: {
+        replied_to: [],
+        liked: [],
+        retweeted: [],
+        quoted: [],
+        followed: [{ tweet_id: "user123", at: "2026-02-23T10:00:00.000Z" }],
+      },
+    });
+    const result = checkDedup("follow_user", "user123", state);
+    expect(result).toContain("Already followed tweet user123");
+    expect(result).toContain("Duplicate blocked");
+  });
+
+  it("returns null for follow_user when not previously followed", () => {
+    const state = makeState();
+    expect(checkDedup("follow_user", "user456", state)).toBeNull();
   });
 });
 
@@ -316,13 +338,21 @@ describe("recordAction", () => {
     expect(state.last_write_at).not.toBeNull();
   });
 
-  it("does not add dedup entry for follow_user (no tweet ID)", () => {
+  it("does not add dedup entry for follow_user when no target ID", () => {
     const state = makeState();
     recordAction("follow_user", null, state);
     expect(state.engaged.replied_to).toHaveLength(0);
     expect(state.engaged.liked).toHaveLength(0);
     expect(state.engaged.retweeted).toHaveLength(0);
     expect(state.engaged.quoted).toHaveLength(0);
+    expect(state.engaged.followed).toHaveLength(0);
+  });
+
+  it("adds to followed dedup set when target ID is provided", () => {
+    const state = makeState();
+    recordAction("follow_user", "user789", state);
+    expect(state.engaged.followed).toHaveLength(1);
+    expect(state.engaged.followed[0].tweet_id).toBe("user789");
   });
 
   it("accumulates counters across multiple calls", () => {

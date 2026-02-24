@@ -60,7 +60,11 @@ async function advanceFollowCycle(
     // Get user to find pinned tweet
     try {
       const { result } = await client.getUser({ userId: workflow.target_user_id });
-      const data = result as { data?: { pinned_tweet_id?: string } };
+      const data = result as { data?: { pinned_tweet_id?: string; public_metrics?: { followers_count?: number } } };
+      // Store follower count for LLM context
+      if (data.data?.public_metrics?.followers_count !== undefined) {
+        workflow.context.author_followers = String(data.data.public_metrics.followers_count);
+      }
       if (data.data?.pinned_tweet_id) {
         workflow.context.pinned_tweet_id = data.data.pinned_tweet_id;
 
@@ -102,7 +106,15 @@ async function advanceFollowCycle(
         workflow.context.target_tweet_text = candidate.note_tweet?.text ?? candidate.text ?? "";
       }
     } catch {
-      // Timeline failure — we can still ask for a reply prompt without context
+      // Timeline failure — no tweet to reply to
+    }
+
+    // If no target tweet was found, skip the reply step entirely
+    if (!workflow.context.target_tweet_id) {
+      const checkDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      workflow.check_after = checkDate;
+      workflow.current_step = "waiting";
+      return { llmNeeded: false, summary: `No suitable tweet found for @${workflow.target_username}, skipping reply. Check-back set for ${checkDate}.` };
     }
 
     workflow.current_step = "need_reply_text";
@@ -146,7 +158,7 @@ async function advanceFollowCycle(
       }
       recordAction("reply_to_tweet", targetTweetId, state);
       workflow.actions_done.push("replied");
-    } catch (e: unknown) {
+    } catch {
       // Reply failure — continue to waiting state anyway
       workflow.actions_done.push("reply_failed");
     }
@@ -169,19 +181,27 @@ async function advanceFollowCycle(
   if (step === "check_followback") {
     try {
       const myId = await client.getAuthenticatedUserId();
-      // Check if target follows us by getting our followers and checking
-      // Use paginated search — but for efficiency, just check the friendship
-      const { result } = await client.getFollowers(myId, 1000);
-      const resp = result as { data?: Array<{ id?: string }> };
-      const followerIds = new Set((resp.data ?? []).map((u) => u.id));
+      // Check if target follows us by paginating through the target's following list.
+      // This is more reliable than checking our followers (which could be >1000 pages).
+      // The target likely follows far fewer people than we have followers.
+      let nextToken: string | undefined;
+      const MAX_PAGES = 5;
+      for (let page = 0; page < MAX_PAGES; page++) {
+        const { result } = await client.getFollowing(workflow.target_user_id, 1000, nextToken);
+        const resp = result as { data?: Array<{ id?: string }>; meta?: { next_token?: string } };
+        const followingIds = (resp.data ?? []).map((u) => u.id);
 
-      if (followerIds.has(workflow.target_user_id)) {
-        workflow.outcome = "followed_back";
-        workflow.current_step = "done";
-        return { llmNeeded: false, summary: `@${workflow.target_username} followed back!` };
+        if (followingIds.includes(myId)) {
+          workflow.outcome = "followed_back";
+          workflow.current_step = "done";
+          return { llmNeeded: false, summary: `@${workflow.target_username} followed back!` };
+        }
+
+        nextToken = resp.meta?.next_token;
+        if (!nextToken) break;
       }
     } catch {
-      // If follower check fails, proceed to cleanup anyway
+      // If followback check fails, proceed to cleanup anyway
     }
 
     workflow.current_step = "cleanup";
@@ -384,6 +404,7 @@ function buildLlmTask(workflow: Workflow): LlmTask {
         tweet_id: workflow.context.target_tweet_id || "",
         tweet_text: workflow.context.target_tweet_text || "",
         author: `@${workflow.target_username}`,
+        author_followers: workflow.context.author_followers || "unknown",
       },
       respond_with: "submit_task",
     };
@@ -403,12 +424,15 @@ export function submitTaskResponse(
   workflowId: string,
   response: Record<string, string>,
 ): { error: string | null; workflow: Workflow | null } {
-  const workflow = state.workflows.find((w) => w.id === workflowId);
+  // Find the active workflow — filter out completed ones to avoid ID collisions
+  // (e.g., a second follow_cycle for the same user reuses the same fc:username ID)
+  const workflow = state.workflows.find((w) => w.id === workflowId && !w.outcome);
   if (!workflow) {
+    const completed = state.workflows.find((w) => w.id === workflowId && !!w.outcome);
+    if (completed) {
+      return { error: `Workflow '${workflowId}' is already completed (${completed.outcome}).`, workflow: null };
+    }
     return { error: `Workflow '${workflowId}' not found.`, workflow: null };
-  }
-  if (workflow.outcome) {
-    return { error: `Workflow '${workflowId}' is already completed (${workflow.outcome}).`, workflow: null };
   }
 
   // Validate response based on current step
@@ -429,6 +453,7 @@ export function createWorkflow(
   type: string,
   targetUserId: string,
   targetUsername: string,
+  initialContext?: Record<string, string>,
 ): { error: string | null; workflow: Workflow | null } {
   const maxWorkflows = getMaxWorkflows();
   const activeCount = state.workflows.filter((w) => !w.outcome).length;
@@ -465,7 +490,7 @@ export function createWorkflow(
     target_username: targetUsername,
     created_at: new Date().toISOString(),
     check_after: null,
-    context: {},
+    context: { ...initialContext },
     actions_done: [],
     outcome: null,
   };

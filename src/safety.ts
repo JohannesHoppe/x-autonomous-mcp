@@ -295,8 +295,6 @@ export function isProtectedAccount(username: string, protectedAccounts: Set<stri
   return protectedAccounts.has(username.replace(/^@/, "").toLowerCase());
 }
 
-// --- Self-describing error hints ---
-
 export function getParameterHint(toolName: string, unknownKey: string, validKeys?: string[]): string | null {
   // Check hardcoded hints first (e.g., "use reply_to_tweet tool instead")
   const hint = PARAMETER_HINTS[toolName]?.[unknownKey];

@@ -35,6 +35,23 @@ describe("getDefaultState", () => {
     expect(state.engaged.retweeted).toEqual([]);
     expect(state.engaged.quoted).toEqual([]);
   });
+
+  it("includes new budget fields: follows, unfollows, deletes", () => {
+    const state = getDefaultState();
+    expect(state.budget.follows).toBe(0);
+    expect(state.budget.unfollows).toBe(0);
+    expect(state.budget.deletes).toBe(0);
+  });
+
+  it("includes followed dedup array", () => {
+    const state = getDefaultState();
+    expect(state.engaged.followed).toEqual([]);
+  });
+
+  it("includes empty workflows array", () => {
+    const state = getDefaultState();
+    expect(state.workflows).toEqual([]);
+  });
 });
 
 describe("loadState", () => {
@@ -198,11 +215,16 @@ describe("state validation", () => {
     expect(state.budget.originals).toBe(1);
     expect(state.budget.likes).toBe(0);
     expect(state.budget.retweets).toBe(0);
+    expect(state.budget.follows).toBe(0);
+    expect(state.budget.unfollows).toBe(0);
+    expect(state.budget.deletes).toBe(0);
     expect(state.last_write_at).toBe("2026-02-23T10:00:00.000Z");
     expect(state.engaged.replied_to).toEqual([]);
     expect(state.engaged.liked).toEqual([]);
     expect(state.engaged.retweeted).toEqual([]);
     expect(state.engaged.quoted).toEqual([]);
+    expect(state.engaged.followed).toEqual([]);
+    expect(state.workflows).toEqual([]);
   });
 
   it("handles completely empty object", () => {
@@ -242,6 +264,191 @@ describe("state validation", () => {
     const state = loadState(filePath);
     expect(state.engaged.replied_to).toHaveLength(1);
     expect(state.engaged.replied_to[0].tweet_id).toBe("valid");
+  });
+});
+
+describe("workflow validation (isWorkflow / asWorkflowArray via loadState)", () => {
+  let filePath: string;
+
+  beforeEach(() => {
+    filePath = tmpFile();
+  });
+
+  afterEach(() => {
+    cleanup(filePath);
+  });
+
+  it("loads valid workflows from state file", () => {
+    const now = new Date().toISOString();
+    fs.writeFileSync(filePath, JSON.stringify({
+      budget: { date: todayString(), replies: 0, originals: 0, likes: 0, retweets: 0, follows: 0, unfollows: 0, deletes: 0 },
+      last_write_at: null,
+      engaged: { replied_to: [], liked: [], retweeted: [], quoted: [], followed: [] },
+      workflows: [{
+        id: "fc:alice",
+        type: "follow_cycle",
+        current_step: "waiting",
+        target_user_id: "123",
+        target_username: "alice",
+        created_at: now,
+        check_after: "2026-03-01",
+        context: { pinned_tweet_id: "456" },
+        actions_done: ["followed", "liked_pinned"],
+        outcome: null,
+      }],
+    }));
+
+    const state = loadState(filePath);
+    expect(state.workflows).toHaveLength(1);
+    expect(state.workflows[0].id).toBe("fc:alice");
+    expect(state.workflows[0].context.pinned_tweet_id).toBe("456");
+    expect(state.workflows[0].actions_done).toEqual(["followed", "liked_pinned"]);
+  });
+
+  it("filters out invalid workflow entries", () => {
+    fs.writeFileSync(filePath, JSON.stringify({
+      budget: { date: todayString(), replies: 0, originals: 0, likes: 0, retweets: 0 },
+      last_write_at: null,
+      engaged: { replied_to: [], liked: [], retweeted: [], quoted: [], followed: [] },
+      workflows: [
+        {
+          id: "fc:valid",
+          type: "follow_cycle",
+          current_step: "waiting",
+          target_user_id: "100",
+          target_username: "valid",
+          created_at: new Date().toISOString(),
+          check_after: null,
+          context: {},
+          actions_done: [],
+          outcome: null,
+        },
+        { id: "missing-fields" },                // invalid: missing required fields
+        "not-an-object",                          // invalid: not an object
+        null,                                     // invalid: null
+        { id: 123, type: "follow_cycle", current_step: "waiting", target_user_id: "1", target_username: "x", created_at: "2026-01-01" }, // invalid: numeric id
+      ],
+    }));
+
+    const state = loadState(filePath);
+    expect(state.workflows).toHaveLength(1);
+    expect(state.workflows[0].id).toBe("fc:valid");
+  });
+
+  it("handles non-array workflows field", () => {
+    fs.writeFileSync(filePath, JSON.stringify({
+      budget: { date: todayString(), replies: 0, originals: 0, likes: 0, retweets: 0 },
+      last_write_at: null,
+      engaged: { replied_to: [], liked: [], retweeted: [], quoted: [], followed: [] },
+      workflows: "not-an-array",
+    }));
+
+    const state = loadState(filePath);
+    expect(state.workflows).toEqual([]);
+  });
+
+  it("normalizes missing optional workflow fields to defaults", () => {
+    fs.writeFileSync(filePath, JSON.stringify({
+      budget: { date: todayString(), replies: 0, originals: 0, likes: 0, retweets: 0 },
+      last_write_at: null,
+      engaged: { replied_to: [], liked: [], retweeted: [], quoted: [], followed: [] },
+      workflows: [{
+        id: "fc:bare",
+        type: "follow_cycle",
+        current_step: "execute_follow",
+        target_user_id: "100",
+        target_username: "bare",
+        created_at: new Date().toISOString(),
+        // Missing: check_after, context, actions_done, outcome
+      }],
+    }));
+
+    const state = loadState(filePath);
+    expect(state.workflows).toHaveLength(1);
+    expect(state.workflows[0].check_after).toBeNull();
+    expect(state.workflows[0].context).toEqual({});
+    expect(state.workflows[0].actions_done).toEqual([]);
+    expect(state.workflows[0].outcome).toBeNull();
+  });
+});
+
+describe("workflow pruning (pruneWorkflows via loadState)", () => {
+  let filePath: string;
+
+  beforeEach(() => {
+    filePath = tmpFile();
+  });
+
+  afterEach(() => {
+    cleanup(filePath);
+  });
+
+  it("prunes completed workflows older than 30 days", () => {
+    const now = new Date();
+    const recentDate = new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000).toISOString(); // 10 days ago
+    const oldDate = new Date(now.getTime() - 40 * 24 * 60 * 60 * 1000).toISOString();    // 40 days ago
+
+    fs.writeFileSync(filePath, JSON.stringify({
+      budget: { date: todayString(), replies: 0, originals: 0, likes: 0, retweets: 0, follows: 0, unfollows: 0, deletes: 0 },
+      last_write_at: null,
+      engaged: { replied_to: [], liked: [], retweeted: [], quoted: [], followed: [] },
+      workflows: [
+        {
+          id: "fc:recent-done",
+          type: "follow_cycle",
+          current_step: "done",
+          target_user_id: "1",
+          target_username: "recent-done",
+          created_at: recentDate,
+          check_after: null,
+          context: {},
+          actions_done: [],
+          outcome: "followed_back",
+        },
+        {
+          id: "fc:old-done",
+          type: "follow_cycle",
+          current_step: "done",
+          target_user_id: "2",
+          target_username: "old-done",
+          created_at: oldDate,
+          check_after: null,
+          context: {},
+          actions_done: [],
+          outcome: "cleaned_up",
+        },
+      ],
+    }));
+
+    const state = loadState(filePath);
+    expect(state.workflows).toHaveLength(1);
+    expect(state.workflows[0].id).toBe("fc:recent-done");
+  });
+
+  it("keeps active workflows regardless of age", () => {
+    const oldDate = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString(); // 60 days ago
+
+    fs.writeFileSync(filePath, JSON.stringify({
+      budget: { date: todayString(), replies: 0, originals: 0, likes: 0, retweets: 0, follows: 0, unfollows: 0, deletes: 0 },
+      last_write_at: null,
+      engaged: { replied_to: [], liked: [], retweeted: [], quoted: [], followed: [] },
+      workflows: [{
+        id: "fc:old-active",
+        type: "follow_cycle",
+        current_step: "waiting",
+        target_user_id: "1",
+        target_username: "old-active",
+        created_at: oldDate,
+        check_after: "2026-04-01",
+        context: {},
+        actions_done: ["followed"],
+        outcome: null,
+      }],
+    }));
+
+    const state = loadState(filePath);
+    expect(state.workflows).toHaveLength(1);
+    expect(state.workflows[0].id).toBe("fc:old-active");
   });
 });
 

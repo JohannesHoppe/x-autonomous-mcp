@@ -34,7 +34,7 @@ Every MCP response includes the remaining budget — reads and writes alike. The
 {
   "data": { "id": "123", "text": "..." },
   "x_rate_limit": "299/300 remaining, resets in 900s",
-  "x_budget": "3/8 replies used, 0/2 originals used, 5/20 likes used, 1/5 retweets used, 0/10 follows used | last action: 3m ago"
+  "x_budget": "3/8 replies used, 0/2 originals used, 5/20 likes used, 1/5 retweets used, 0/10 follows used, 0/10 unfollows used, 0/5 deletes used | last action: 3m ago"
 }
 ```
 
@@ -50,7 +50,7 @@ meta:
   result_count: 2
   next_token: abc
 x_rate_limit: 299/300 (900s)
-x_budget: "3/8 replies used, 0/2 originals used, 5/20 likes used, 1/5 retweets used, 0/10 follows used"
+x_budget: "3/8 replies used, 0/2 originals used, 5/20 likes used, 1/5 retweets used, 0/10 follows used, 0/10 unfollows used, 0/5 deletes used"
 ```
 
 Set `X_MCP_TOON=false` to get non-pretty JSON instead.
@@ -179,7 +179,7 @@ meta:
   result_count: 3
   next_token: abc123
 x_rate_limit: 299/300 (900s)
-x_budget: "3/8 replies used, 0/2 originals used, 5/20 likes used, 1/5 retweets used, 0/10 follows used | last action: 3m ago"
+x_budget: "3/8 replies used, 0/2 originals used, 5/20 likes used, 1/5 retweets used, 0/10 follows used, 0/10 unfollows used, 0/5 deletes used | last action: 3m ago"
 ```
 
 Compact tweets include `author_followers` (raw count) and `author_follower_ratio` (followers/following ratio, precomputed). `replied_to_id` is the tweet ID this is replying to, or `null` for standalone tweets.
@@ -199,7 +199,7 @@ data:
   replied_to_id: null
   created_at: "2026-02-23T17:00:01.000Z"
 x_rate_limit: 299/300 (900s)
-x_budget: "3/8 replies used, 0/2 originals used, 5/20 likes used, 1/5 retweets used, 0/10 follows used"
+x_budget: "3/8 replies used, 0/2 originals used, 5/20 likes used, 1/5 retweets used, 0/10 follows used, 0/10 unfollows used, 0/5 deletes used"
 ```
 
 ### get_user
@@ -213,34 +213,35 @@ data:
   following: 567
   tweets: 890
   bio: Building things with TypeScript and AI
+  pinned_tweet_id: "1893650001"
 x_rate_limit: 299/300 (900s)
-x_budget: "0/8 replies used, 0/2 originals used, 0/20 likes used, 0/5 retweets used, 0/10 follows used"
+x_budget: "0/8 replies used, 0/2 originals used, 0/20 likes used, 0/5 retweets used, 0/10 follows used, 0/10 unfollows used, 0/5 deletes used"
 ```
 
 ### get_followers / get_following
 
 ```
-data[2]{id,username,name,followers,following,tweets,bio}:
-  "123456",alice_dev,Alice,8900,450,1200,Full-stack engineer
-  "789012",bob_ai,Bob,340,120,890,ML researcher
+data[2]{id,username,name,followers,following,tweets,bio,pinned_tweet_id}:
+  "123456",alice_dev,Alice,8900,450,1200,Full-stack engineer,"1893650100"
+  "789012",bob_ai,Bob,340,120,890,ML researcher,null
 meta:
   result_count: 2
   next_token: def456
 x_rate_limit: 14/15 (900s)
-x_budget: "0/8 replies used, 0/2 originals used, 0/20 likes used, 0/5 retweets used, 0/10 follows used"
+x_budget: "0/8 replies used, 0/2 originals used, 0/20 likes used, 0/5 retweets used, 0/10 follows used, 0/10 unfollows used, 0/5 deletes used"
 ```
 
 ### get_non_followers
 
 ```
-data[2]{id,username,name,followers,following,tweets,bio}:
-  "111222",inactive_acc,Some Account,12,5000,3,
-  "333444",spam_bot,Spammy,0,10000,50000,Follow me!
+data[2]{id,username,name,followers,following,tweets,bio,pinned_tweet_id}:
+  "111222",inactive_acc,Some Account,12,5000,3,,null
+  "333444",spam_bot,Spammy,0,10000,50000,Follow me!,null
 total_following: 567
 total_followers: 1234
 non_followers_count: 2
 x_rate_limit: 14/15 (900s)
-x_budget: "0/8 replies used, 0/2 originals used, 0/20 likes used, 0/5 retweets used, 0/10 follows used"
+x_budget: "0/8 replies used, 0/2 originals used, 0/20 likes used, 0/5 retweets used, 0/10 follows used, 0/10 unfollows used, 0/5 deletes used"
 ```
 
 Sorted by follower count ascending (lowest quality first = best unfollow candidates).
@@ -252,7 +253,7 @@ data:
   id: "1893661000"
   text: Hello world!
 x_rate_limit: 199/200 (900s)
-x_budget: "0/8 replies used, 1/2 originals used, 0/20 likes used, 0/5 retweets used, 0/10 follows used | last action: 0s ago"
+x_budget: "0/8 replies used, 1/2 originals used, 0/20 likes used, 0/5 retweets used, 0/10 follows used, 0/10 unfollows used, 0/5 deletes used | last action: 0s ago"
 ```
 
 ### like_tweet / retweet / follow_user
@@ -261,7 +262,7 @@ x_budget: "0/8 replies used, 1/2 originals used, 0/20 likes used, 0/5 retweets u
 data:
   liked: true
 x_rate_limit: 199/200 (900s)
-x_budget: "0/8 replies used, 0/2 originals used, 1/20 likes used, 0/5 retweets used, 0/10 follows used | last action: 0s ago"
+x_budget: "0/8 replies used, 0/2 originals used, 1/20 likes used, 0/5 retweets used, 0/10 follows used, 0/10 unfollows used, 0/5 deletes used | last action: 0s ago"
 ```
 
 ### get_metrics
@@ -278,7 +279,7 @@ data:
     bookmark_count: 156
     impression_count: 892340
 x_rate_limit: 299/300 (900s)
-x_budget: "0/8 replies used, 0/2 originals used, 0/20 likes used, 0/5 retweets used, 0/10 follows used"
+x_budget: "0/8 replies used, 0/2 originals used, 0/20 likes used, 0/5 retweets used, 0/10 follows used, 0/10 unfollows used, 0/5 deletes used"
 ```
 
 ### upload_media
@@ -287,23 +288,23 @@ x_budget: "0/8 replies used, 0/2 originals used, 0/20 likes used, 0/5 retweets u
 media_id: "1893670001"
 message: Upload complete. Use this media_id in post_tweet.
 x_rate_limit: 299/300 (900s)
-x_budget: "0/8 replies used, 0/2 originals used, 0/20 likes used, 0/5 retweets used, 0/10 follows used"
+x_budget: "0/8 replies used, 0/2 originals used, 0/20 likes used, 0/5 retweets used, 0/10 follows used, 0/10 unfollows used, 0/5 deletes used"
 ```
 
 ### Error responses
 
 Budget exhausted:
 ```
-Error: Daily reply limit reached (8/8). Try again tomorrow. Remaining today: 0 replies, 2 originals, 15 likes, 5 retweets, 10 follows.
+Error: Daily reply limit reached (8/8). Try again tomorrow. Remaining today: 0 replies, 2 originals, 15 likes, 5 retweets, 10 follows, 10 unfollows, 5 deletes.
 
-Current x_budget: 8/8 replies used (LIMIT REACHED), 0/2 originals used, 5/20 likes used, 0/5 retweets used, 0/10 follows used
+Current x_budget: 8/8 replies used (LIMIT REACHED), 0/2 originals used, 5/20 likes used, 0/5 retweets used, 0/10 follows used, 0/10 unfollows used, 0/5 deletes used
 ```
 
 Duplicate engagement:
 ```
 Error: Already liked tweet 1893660912 at 2026-02-23T10:00:00.000Z. Duplicate blocked.
 
-Current x_budget: 3/8 replies used, 0/2 originals used, 5/20 likes used, 1/5 retweets used, 0/10 follows used
+Current x_budget: 3/8 replies used, 0/2 originals used, 5/20 likes used, 1/5 retweets used, 0/10 follows used, 0/10 unfollows used, 0/5 deletes used
 ```
 
 Unknown parameter:
@@ -312,7 +313,7 @@ Error: Unknown parameter 'poll_option': Did you mean 'poll_options'?
 
 Valid parameters for post_tweet: text, poll_options, poll_duration_minutes, media_ids
 
-Current x_budget: 0/8 replies used, 0/2 originals used, 0/20 likes used, 0/5 retweets used, 0/10 follows used
+Current x_budget: 0/8 replies used, 0/2 originals used, 0/20 likes used, 0/5 retweets used, 0/10 follows used, 0/10 unfollows used, 0/5 deletes used
 ```
 
 ---

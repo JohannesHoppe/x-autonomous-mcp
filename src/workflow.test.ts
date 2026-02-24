@@ -48,7 +48,7 @@ function makeWorkflow(overrides?: Partial<Workflow>): Workflow {
 function makeMockClient(overrides?: Partial<Record<string, unknown>>): XApiClient {
   return {
     followUser: vi.fn().mockResolvedValue({ result: { data: { following: true } }, rateLimit: "" }),
-    getUser: vi.fn().mockResolvedValue({ result: { data: { id: "12345", pinned_tweet_id: "pin123" } }, rateLimit: "" }),
+    getUser: vi.fn().mockResolvedValue({ result: { data: { id: "12345", pinned_tweet_id: "pin123", public_metrics: { followers_count: 5000 } } }, rateLimit: "" }),
     likeTweet: vi.fn().mockResolvedValue({ result: { data: { liked: true } }, rateLimit: "" }),
     unlikeTweet: vi.fn().mockResolvedValue({ result: { data: { liked: false } }, rateLimit: "" }),
     getTimeline: vi.fn().mockResolvedValue({
@@ -65,6 +65,7 @@ function makeMockClient(overrides?: Partial<Record<string, unknown>>): XApiClien
     unfollowUser: vi.fn().mockResolvedValue({ result: { data: { following: false } }, rateLimit: "" }),
     getAuthenticatedUserId: vi.fn().mockResolvedValue("myid"),
     getFollowers: vi.fn().mockResolvedValue({ result: { data: [] }, rateLimit: "" }),
+    getFollowing: vi.fn().mockResolvedValue({ result: { data: [], meta: {} }, rateLimit: "" }),
     getTweetMetrics: vi.fn().mockResolvedValue({
       result: { data: { public_metrics: { like_count: 5, reply_count: 2, impression_count: 100 } } },
       rateLimit: "",
@@ -113,6 +114,13 @@ describe("createWorkflow", () => {
     expect(workflow!.id).toMatch(/^rt:testuser:\d+$/);
   });
 
+  it("creates a reply_track with initial context", () => {
+    const state = makeState();
+    const { error, workflow } = createWorkflow(state, "reply_track", "12345", "testuser", { reply_tweet_id: "rt999" });
+    expect(error).toBeNull();
+    expect(workflow!.context.reply_tweet_id).toBe("rt999");
+  });
+
   it("rejects unknown workflow type", () => {
     const state = makeState();
     const { error } = createWorkflow(state, "unknown_type", "12345", "testuser");
@@ -140,6 +148,15 @@ describe("createWorkflow", () => {
     const state = makeState({ workflows });
     const { error } = createWorkflow(state, "follow_cycle", "99999", "newuser");
     expect(error).toContain("Maximum active workflows");
+  });
+
+  it("allows same target after previous workflow completed", () => {
+    const completed = makeWorkflow({ outcome: "cleaned_up", current_step: "done" });
+    const state = makeState({ workflows: [completed] });
+    const { error, workflow } = createWorkflow(state, "follow_cycle", "12345", "testuser");
+    expect(error).toBeNull();
+    expect(workflow).not.toBeNull();
+    expect(state.workflows).toHaveLength(2);
   });
 });
 
@@ -182,6 +199,16 @@ describe("submitTaskResponse", () => {
     const state = makeState({ workflows: [workflow] });
     const { error } = submitTaskResponse(state, "fc:testuser", { reply_text: "Hi" });
     expect(error).toContain("Unexpected submit");
+  });
+
+  it("finds active workflow when completed workflow with same ID exists", () => {
+    const completed = makeWorkflow({ outcome: "cleaned_up", current_step: "done" });
+    const active = makeWorkflow({ current_step: "need_reply_text" });
+    const state = makeState({ workflows: [completed, active] });
+    const { error } = submitTaskResponse(state, "fc:testuser", { reply_text: "Hello!" });
+    expect(error).toBeNull();
+    expect(active.current_step).toBe("post_reply");
+    expect(active.context.reply_text).toBe("Hello!");
   });
 });
 
@@ -241,10 +268,12 @@ describe("processWorkflows — follow_cycle", () => {
     expect(workflow.actions_done).toContain("liked_pinned");
     expect(workflow.context.target_tweet_id).toBe("tweet1"); // picks non-reply
     expect(workflow.context.pinned_tweet_id).toBe("pin123");
+    expect(workflow.context.author_followers).toBe("5000");
 
     expect(result.next_task).not.toBeNull();
     expect(result.next_task!.workflow_id).toBe("fc:testuser");
     expect(result.next_task!.instruction).toContain("reply");
+    expect(result.next_task!.context.author_followers).toBe("5000");
   });
 
   it("skips duplicate follow", async () => {
@@ -319,28 +348,28 @@ describe("processWorkflows — follow_cycle", () => {
       check_after: pastDate,
     });
     const state = makeState({ workflows: [workflow] });
-    // Mock: target did NOT follow back
+    // Mock: target's following list does NOT include our ID → not followed back
     const client = makeMockClient();
 
     await processWorkflows(state, client, makeConfig(), new Set());
 
-    expect(client.getFollowers).toHaveBeenCalled();
-    // Since mock getFollowers returns empty array → not followed back → cleanup
+    expect(client.getFollowing).toHaveBeenCalled();
+    // Since mock getFollowing returns empty array → not followed back → cleanup
     expect(workflow.outcome).toBe("cleaned_up");
     expect(workflow.current_step).toBe("done");
   });
 
-  it("detects followback", async () => {
+  it("detects followback by checking target's following list", async () => {
     const pastDate = new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
     const workflow = makeWorkflow({
       current_step: "waiting",
       check_after: pastDate,
     });
     const state = makeState({ workflows: [workflow] });
-    // Mock: target followed back
+    // Mock: target follows us (our ID "myid" is in their following list)
     const client = makeMockClient({
-      getFollowers: vi.fn().mockResolvedValue({
-        result: { data: [{ id: "12345" }] },
+      getFollowing: vi.fn().mockResolvedValue({
+        result: { data: [{ id: "myid" }, { id: "other" }], meta: {} },
         rateLimit: "",
       }),
     });
@@ -349,6 +378,32 @@ describe("processWorkflows — follow_cycle", () => {
 
     expect(workflow.outcome).toBe("followed_back");
     expect(workflow.current_step).toBe("done");
+  });
+
+  it("paginates through target's following list to find followback", async () => {
+    const pastDate = new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const workflow = makeWorkflow({
+      current_step: "waiting",
+      check_after: pastDate,
+    });
+    const state = makeState({ workflows: [workflow] });
+    // Mock: our ID is on page 2 of target's following list
+    const client = makeMockClient({
+      getFollowing: vi.fn()
+        .mockResolvedValueOnce({
+          result: { data: [{ id: "other1" }, { id: "other2" }], meta: { next_token: "page2" } },
+          rateLimit: "",
+        })
+        .mockResolvedValueOnce({
+          result: { data: [{ id: "myid" }], meta: {} },
+          rateLimit: "",
+        }),
+    });
+
+    await processWorkflows(state, client, makeConfig(), new Set());
+
+    expect(client.getFollowing).toHaveBeenCalledTimes(2);
+    expect(workflow.outcome).toBe("followed_back");
   });
 
   it("protects accounts from cleanup", async () => {
@@ -382,6 +437,117 @@ describe("processWorkflows — follow_cycle", () => {
     expect(workflow.actions_done).toContain("unliked_pinned");
     expect(workflow.actions_done).toContain("deleted_reply");
     expect(workflow.actions_done).toContain("unfollowed");
+  });
+
+  it("skips reply when no target tweet found in timeline", async () => {
+    const workflow = makeWorkflow({ current_step: "execute_follow" });
+    const state = makeState({ workflows: [workflow] });
+    // Mock: empty timeline
+    const client = makeMockClient({
+      getTimeline: vi.fn().mockResolvedValue({ result: { data: [] }, rateLimit: "" }),
+    });
+
+    const result = await processWorkflows(state, client, makeConfig(), new Set());
+
+    expect(workflow.current_step).toBe("waiting");
+    expect(workflow.check_after).not.toBeNull();
+    expect(result.next_task).toBeNull(); // no LLM task since reply was skipped
+    expect(result.auto_completed.some((s: string) => s.includes("No suitable tweet"))).toBe(true);
+  });
+
+  it("continues when follow succeeds but getUser fails", async () => {
+    const workflow = makeWorkflow({ current_step: "execute_follow" });
+    const state = makeState({ workflows: [workflow] });
+    const client = makeMockClient({
+      getUser: vi.fn().mockRejectedValue(new Error("getUser API error")),
+    });
+
+    const result = await processWorkflows(state, client, makeConfig(), new Set());
+
+    expect(client.followUser).toHaveBeenCalled();
+    expect(workflow.actions_done).toContain("followed");
+    // Should still advance past execute_follow even though getUser failed
+    expect(workflow.current_step).not.toBe("execute_follow");
+  });
+
+  it("continues when like fails", async () => {
+    const workflow = makeWorkflow({ current_step: "execute_follow" });
+    const state = makeState({ workflows: [workflow] });
+    const client = makeMockClient({
+      likeTweet: vi.fn().mockRejectedValue(new Error("like API error")),
+    });
+
+    const result = await processWorkflows(state, client, makeConfig(), new Set());
+
+    expect(workflow.actions_done).toContain("followed");
+    expect(workflow.actions_done).not.toContain("liked_pinned");
+    // Should still advance to need_reply_text
+    expect(workflow.current_step).toBe("need_reply_text");
+  });
+
+  it("aborts workflow when follow fails", async () => {
+    const workflow = makeWorkflow({ current_step: "execute_follow" });
+    const state = makeState({ workflows: [workflow] });
+    const client = makeMockClient({
+      followUser: vi.fn().mockRejectedValue(new Error("follow API error")),
+    });
+
+    await processWorkflows(state, client, makeConfig(), new Set());
+
+    expect(workflow.outcome).toBe("follow_failed");
+    expect(workflow.current_step).toBe("done");
+  });
+
+  it("continues cleanup when unlike fails", async () => {
+    const workflow = makeWorkflow({
+      current_step: "cleanup",
+      context: { pinned_tweet_id: "pin123", reply_tweet_id: "reply789" },
+    });
+    const state = makeState({ workflows: [workflow] });
+    const client = makeMockClient({
+      unlikeTweet: vi.fn().mockRejectedValue(new Error("unlike failed")),
+    });
+
+    await processWorkflows(state, client, makeConfig(), new Set());
+
+    expect(workflow.outcome).toBe("cleaned_up");
+    expect(workflow.actions_done).not.toContain("unliked_pinned");
+    expect(workflow.actions_done).toContain("deleted_reply");
+    expect(workflow.actions_done).toContain("unfollowed");
+  });
+
+  it("skips reply when reply budget is exhausted", async () => {
+    const workflow = makeWorkflow({
+      current_step: "post_reply",
+      context: { reply_text: "Great insight!", target_tweet_id: "tweet1" },
+    });
+    const state = makeState({
+      workflows: [workflow],
+      budget: { ...getDefaultState().budget, replies: 8 },
+    });
+    const client = makeMockClient();
+
+    await processWorkflows(state, client, makeConfig(), new Set());
+
+    expect(client.postTweet).not.toHaveBeenCalled();
+    expect(workflow.current_step).toBe("waiting");
+    expect(workflow.check_after).not.toBeNull();
+  });
+
+  it("continues to waiting even when reply posting fails", async () => {
+    const workflow = makeWorkflow({
+      current_step: "post_reply",
+      context: { reply_text: "Great insight!", target_tweet_id: "tweet1" },
+    });
+    const state = makeState({ workflows: [workflow] });
+    const client = makeMockClient({
+      postTweet: vi.fn().mockRejectedValue(new Error("post failed")),
+    });
+
+    await processWorkflows(state, client, makeConfig(), new Set());
+
+    expect(workflow.current_step).toBe("waiting");
+    expect(workflow.actions_done).toContain("reply_failed");
   });
 });
 
@@ -461,6 +627,42 @@ describe("processWorkflows — reply_track", () => {
     expect(client.deleteTweet).toHaveBeenCalledWith("reply1");
     expect(workflow.outcome).toBe("deleted_low_engagement");
   });
+
+  it("finishes with no_tweet_to_audit when reply_tweet_id is missing", async () => {
+    const workflow = makeWorkflow({
+      id: "rt:testuser:123",
+      type: "reply_track",
+      current_step: "waiting_audit",
+      created_at: new Date(Date.now() - 49 * 60 * 60 * 1000).toISOString(),
+      context: {}, // no reply_tweet_id
+    });
+    const state = makeState({ workflows: [workflow] });
+    const client = makeMockClient();
+
+    await processWorkflows(state, client, makeConfig(), new Set());
+
+    expect(workflow.outcome).toBe("no_tweet_to_audit");
+    expect(workflow.current_step).toBe("done");
+  });
+
+  it("keeps tweet when metrics API fails", async () => {
+    const workflow = makeWorkflow({
+      id: "rt:testuser:123",
+      type: "reply_track",
+      current_step: "waiting_audit",
+      created_at: new Date(Date.now() - 49 * 60 * 60 * 1000).toISOString(),
+      context: { reply_tweet_id: "reply1" },
+    });
+    const state = makeState({ workflows: [workflow] });
+    const client = makeMockClient({
+      getTweetMetrics: vi.fn().mockRejectedValue(new Error("metrics API error")),
+    });
+
+    await processWorkflows(state, client, makeConfig(), new Set());
+
+    expect(workflow.outcome).toBe("audit_failed");
+    expect(workflow.current_step).toBe("done");
+  });
 });
 
 // ============================================================
@@ -510,6 +712,18 @@ describe("cleanupNonFollowers", () => {
 
     expect(result.unfollowed).toEqual([]);
     expect(result.skipped).toContain("budget exhausted — stopped");
+  });
+
+  it("handles API error during getNonFollowers", async () => {
+    const state = makeState();
+    const client = makeMockClient({
+      getNonFollowers: vi.fn().mockRejectedValue(new Error("API down")),
+    });
+
+    const result = await cleanupNonFollowers(client, state, makeConfig(), new Set(), 10, 5);
+
+    expect(result.error).toContain("API down");
+    expect(result.unfollowed).toEqual([]);
   });
 });
 
