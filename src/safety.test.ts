@@ -155,6 +155,29 @@ describe("checkBudget", () => {
   it("returns null for delete_tweet (no budget)", () => {
     expect(checkBudget("delete_tweet", makeState(), makeConfig())).toBeNull();
   });
+
+  it("maps follow_user to follows budget", () => {
+    const state = makeState({
+      budget: { date: "2026-02-23", replies: 0, originals: 0, likes: 0, retweets: 0, follows: 10 },
+    });
+    const result = checkBudget("follow_user", state, makeConfig());
+    expect(result).toContain("limit reached");
+  });
+
+  it("returns null for follow_user under limit", () => {
+    const state = makeState({
+      budget: { date: "2026-02-23", replies: 0, originals: 0, likes: 0, retweets: 0, follows: 3 },
+    });
+    expect(checkBudget("follow_user", state, makeConfig())).toBeNull();
+  });
+
+  it("returns null for unfollow_user (no budget)", () => {
+    expect(checkBudget("unfollow_user", makeState(), makeConfig())).toBeNull();
+  });
+
+  it("returns null for get_non_followers (read-only)", () => {
+    expect(checkBudget("get_non_followers", makeState(), makeConfig())).toBeNull();
+  });
 });
 
 describe("checkDedup", () => {
@@ -269,6 +292,33 @@ describe("recordAction", () => {
     expect(state.engaged.quoted).toHaveLength(1);
     expect(state.engaged.quoted[0].tweet_id).toBe("789");
   });
+
+  it("increments follow counter", () => {
+    const state = makeState();
+    recordAction("follow_user", null, state);
+    expect(state.budget.follows).toBe(1);
+    expect(state.last_write_at).not.toBeNull();
+  });
+
+  it("does not add dedup entry for follow_user (no tweet ID)", () => {
+    const state = makeState();
+    recordAction("follow_user", null, state);
+    expect(state.engaged.replied_to).toHaveLength(0);
+    expect(state.engaged.liked).toHaveLength(0);
+    expect(state.engaged.retweeted).toHaveLength(0);
+    expect(state.engaged.quoted).toHaveLength(0);
+  });
+
+  it("accumulates counters across multiple calls", () => {
+    const state = makeState();
+    recordAction("reply_to_tweet", "a", state);
+    recordAction("reply_to_tweet", "b", state);
+    recordAction("like_tweet", "c", state);
+    expect(state.budget.replies).toBe(2);
+    expect(state.budget.likes).toBe(1);
+    expect(state.engaged.replied_to).toHaveLength(2);
+    expect(state.engaged.liked).toHaveLength(1);
+  });
 });
 
 describe("getParameterHint", () => {
@@ -315,6 +365,14 @@ describe("getParameterHint", () => {
   it("returns null for completely unrelated parameter names", () => {
     expect(getParameterHint("post_tweet", "completely_unrelated_garbage_param", VALID_KEYS)).toBeNull();
   });
+
+  it("returns null when validKeys is empty array", () => {
+    expect(getParameterHint("post_tweet", "text", [])).toBeNull();
+  });
+
+  it("returns null when validKeys is not provided and no hardcoded hint", () => {
+    expect(getParameterHint("post_tweet", "random_param")).toBeNull();
+  });
 });
 
 describe("isWriteTool", () => {
@@ -324,6 +382,7 @@ describe("isWriteTool", () => {
     expect(isWriteTool("quote_tweet")).toBe(true);
     expect(isWriteTool("like_tweet")).toBe(true);
     expect(isWriteTool("retweet")).toBe(true);
+    expect(isWriteTool("follow_user")).toBe(true);
   });
 
   it("returns false for read-only tools", () => {
@@ -340,6 +399,14 @@ describe("isWriteTool", () => {
 
   it("returns false for delete_tweet (no budget action)", () => {
     expect(isWriteTool("delete_tweet")).toBe(false);
+  });
+
+  it("returns false for unfollow_user (no budget action)", () => {
+    expect(isWriteTool("unfollow_user")).toBe(false);
+  });
+
+  it("returns false for get_non_followers (read-only)", () => {
+    expect(isWriteTool("get_non_followers")).toBe(false);
   });
 
   it("returns false for unknown tools", () => {

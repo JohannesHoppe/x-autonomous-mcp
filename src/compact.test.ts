@@ -259,4 +259,73 @@ describe("compactResponse", () => {
     const response = { data: [], meta: { result_count: 0 } };
     expect(compactResponse(response)).toEqual(response);
   });
+
+  it("handles response with includes but empty users array", () => {
+    const response = {
+      data: {
+        id: "123",
+        text: "Hello",
+        author_id: "456",
+        public_metrics: { like_count: 0, retweet_count: 0, reply_count: 0 },
+        created_at: "2026-02-23T13:00:00.000Z",
+      },
+      includes: { users: [] },
+    };
+    const result = compactResponse(response) as Record<string, unknown>;
+    const data = result.data as Record<string, unknown>;
+    expect(data.author).toBe("456"); // falls back to author_id
+    expect(data.author_followers).toBe(0);
+    expect(data.author_ratio).toBe(0);
+  });
+
+  it("drops meta fields other than result_count and next_token", () => {
+    const response = {
+      data: [
+        { id: "1", text: "t", author_id: "10", public_metrics: { like_count: 0, retweet_count: 0, reply_count: 0 }, created_at: "2026-02-23T13:00:00.000Z" },
+      ],
+      includes: { users: [{ id: "10", username: "u", name: "U" }] },
+      meta: { result_count: 1, newest_id: "1", oldest_id: "1" },
+    };
+    const result = compactResponse(response) as Record<string, unknown>;
+    const meta = result.meta as Record<string, unknown>;
+    expect(meta.result_count).toBe(1);
+    expect(meta).not.toHaveProperty("newest_id");
+    expect(meta).not.toHaveProperty("oldest_id");
+  });
+
+  it("omits meta entirely when result_count and next_token are both absent", () => {
+    const response = {
+      data: {
+        id: "123",
+        text: "Hello",
+        author_id: "456",
+        public_metrics: { like_count: 0, retweet_count: 0, reply_count: 0 },
+        created_at: "2026-02-23T13:00:00.000Z",
+      },
+      includes: { users: [{ id: "456", username: "u", name: "U" }] },
+      meta: { newest_id: "123", oldest_id: "123" },
+    };
+    const result = compactResponse(response) as Record<string, unknown>;
+    expect(result).not.toHaveProperty("meta");
+  });
+
+  it("compacts tweet with author who has missing public_metrics", () => {
+    const response = {
+      data: {
+        id: "123",
+        text: "Hi",
+        author_id: "456",
+        public_metrics: { like_count: 1, retweet_count: 0, reply_count: 0 },
+        created_at: "2026-02-23T13:00:00.000Z",
+      },
+      includes: {
+        users: [{ id: "456", username: "nometrics", name: "No Metrics" }],
+      },
+    };
+    const result = compactResponse(response) as Record<string, unknown>;
+    const data = result.data as Record<string, unknown>;
+    expect(data.author).toBe("@nometrics");
+    expect(data.author_followers).toBe(0);
+    expect(data.author_ratio).toBe(0);
+  });
 });

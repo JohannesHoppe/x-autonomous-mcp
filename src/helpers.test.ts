@@ -123,4 +123,43 @@ describe("formatResult", () => {
     expect(result.data).toHaveLength(1);
     expect(result.data[0].author).toBe("@u");
   });
+
+  it("returns TOON string when toon=true", () => {
+    const result = formatResult({ id: "1", text: "hi" }, "5/15", undefined, false, true);
+    // TOON output is not JSON — should not parse as JSON
+    expect(() => JSON.parse(result)).toThrow();
+    // Should contain TOON key-value format
+    expect(result).toContain("data:");
+    expect(result).toContain("id: ");
+    expect(result).toContain("rate_limit: 5/15");
+  });
+
+  it("returns TOON with compact+toon combination", () => {
+    const apiResponse = {
+      data: {
+        id: "123",
+        text: "Hello",
+        author_id: "456",
+        public_metrics: { like_count: 5, retweet_count: 1, reply_count: 0 },
+        created_at: "2026-02-23T13:00:00.000Z",
+      },
+      includes: {
+        users: [{ id: "456", username: "author", name: "Author" }],
+      },
+    };
+    const result = formatResult(apiResponse, "5/15", "3/8 replies", true, true);
+    // Should be TOON, not JSON
+    expect(() => JSON.parse(result)).toThrow();
+    // Compact fields should appear
+    expect(result).toContain("@author");
+    expect(result).toContain("budget:");
+    expect(result).toContain("rate_limit:");
+  });
+
+  it("returns JSON (not TOON) when toon=false", () => {
+    const result = formatResult({ id: "1" }, "5/15", undefined, false, false);
+    const parsed = JSON.parse(result);
+    expect(parsed.data.id).toBe("1");
+    expect(parsed.rate_limit).toBe("5/15");
+  });
 });
