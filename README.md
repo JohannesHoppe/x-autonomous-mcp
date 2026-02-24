@@ -68,12 +68,12 @@ When the LLM hallucinates a parameter on `post_tweet`, the error tells it what t
 Unknown parameter 'reply_to_tweet_id': Use the 'reply_to_tweet' tool instead.
 ```
 
-### Destructive tool gating (default off)
+### Destructive tool gating (default: ON = safe)
 
-Destructive operations like `delete_tweet` are **completely hidden** from the LLM unless explicitly enabled. The tool doesn't show up in the tool list at all — the LLM can't even attempt to call it.
+Destructive operations like `delete_tweet` are **completely hidden** from the LLM unless explicitly opted in. The tool doesn't show up in the tool list at all — the LLM can't even attempt to call it.
 
 ```
-X_MCP_ENABLE_DANGEROUS=true   # Off by default. Set to enable delete_tweet.
+X_MCP_ENABLE_DANGEROUS=true   # Opt in to expose delete_tweet.
 ```
 
 ### Strict schema validation

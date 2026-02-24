@@ -14,7 +14,7 @@ describe("compactTweet", () => {
       conversation_id: "100",
       lang: "en",
     };
-    const users = [{ id: "456", username: "testuser", name: "Test User" }];
+    const users = [{ id: "456", username: "testuser", name: "Test User", public_metrics: { followers_count: 1000, following_count: 100, tweet_count: 500 } }];
 
     const result = compactTweet(tweet, users);
 
@@ -22,9 +22,12 @@ describe("compactTweet", () => {
       id: "123",
       text: "Hello world",
       author: "@testuser",
+      author_followers: 1000,
+      author_ratio: 10,
       likes: 10,
       retweets: 5,
       replies: 2,
+      is_reply_to: null,
       created_at: "2026-02-23T13:34:36.000Z",
     });
   });
@@ -43,6 +46,19 @@ describe("compactTweet", () => {
     expect(result.is_reply_to).toBe("100");
   });
 
+  it("sets is_reply_to to null for non-replies", () => {
+    const tweet = {
+      id: "201",
+      text: "not a reply",
+      author_id: "456",
+      public_metrics: { like_count: 0, retweet_count: 0, reply_count: 0 },
+      created_at: "2026-02-23T14:00:00.000Z",
+    };
+
+    const result = compactTweet(tweet, []);
+    expect(result.is_reply_to).toBeNull();
+  });
+
   it("uses author_id as fallback when user not in includes", () => {
     const tweet = {
       id: "300",
@@ -54,6 +70,8 @@ describe("compactTweet", () => {
 
     const result = compactTweet(tweet, []);
     expect(result.author).toBe("999");
+    expect(result.author_followers).toBe(0);
+    expect(result.author_ratio).toBe(0);
   });
 
   it("defaults missing metrics to 0", () => {
@@ -67,6 +85,30 @@ describe("compactTweet", () => {
     expect(result.likes).toBe(0);
     expect(result.retweets).toBe(0);
     expect(result.replies).toBe(0);
+    expect(result.author_followers).toBe(0);
+    expect(result.author_ratio).toBe(0);
+  });
+
+  it("computes author_ratio correctly", () => {
+    const tweet = {
+      id: "500",
+      text: "ratio test",
+      author_id: "456",
+      public_metrics: { like_count: 0, retweet_count: 0, reply_count: 0 },
+      created_at: "2026-02-23T14:00:00.000Z",
+    };
+
+    // 1000/100 = ratio 10
+    const users1 = [{ id: "456", username: "u", name: "U", public_metrics: { followers_count: 1000, following_count: 100, tweet_count: 0 } }];
+    expect(compactTweet(tweet, users1).author_ratio).toBe(10);
+
+    // 100/1000 = ratio 0.1
+    const users2 = [{ id: "456", username: "u", name: "U", public_metrics: { followers_count: 100, following_count: 1000, tweet_count: 0 } }];
+    expect(compactTweet(tweet, users2).author_ratio).toBe(0.1);
+
+    // follows nobody → ratio = follower count
+    const users3 = [{ id: "456", username: "u", name: "U", public_metrics: { followers_count: 5000, following_count: 0, tweet_count: 0 } }];
+    expect(compactTweet(tweet, users3).author_ratio).toBe(5000);
   });
 });
 

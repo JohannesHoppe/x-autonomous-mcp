@@ -2,10 +2,12 @@ export interface CompactTweet {
   id: string;
   text: string;
   author: string;
+  author_followers: number;
+  author_ratio: number;
   likes: number;
   retweets: number;
   replies: number;
-  is_reply_to?: string;
+  is_reply_to: string | null;
   created_at: string;
 }
 
@@ -57,31 +59,35 @@ function isUser(obj: unknown): obj is UserLike {
   return typeof o.username === "string" && typeof o.id === "string" && !("text" in o);
 }
 
-function resolveAuthor(authorId: string | undefined, users: UserLike[]): string {
-  if (!authorId) return "unknown";
-  const user = users.find((u) => u.id === authorId);
-  return user?.username ? `@${user.username}` : authorId;
+function findAuthor(authorId: string | undefined, users: UserLike[]): UserLike | undefined {
+  if (!authorId) return undefined;
+  return users.find((u) => u.id === authorId);
+}
+
+function followerRatio(followers: number, following: number): number {
+  if (following <= 0) return followers; // follows nobody → ratio is effectively the follower count
+  return Math.round((followers / following) * 10) / 10;
 }
 
 export function compactTweet(tweet: TweetLike, users: UserLike[]): CompactTweet {
   const metrics = tweet.public_metrics;
   const repliedTo = tweet.referenced_tweets?.find((r) => r.type === "replied_to");
+  const author = findAuthor(tweet.author_id, users);
+  const authorFollowers = author?.public_metrics?.followers_count ?? 0;
+  const authorFollowing = author?.public_metrics?.following_count ?? 0;
 
-  const result: CompactTweet = {
+  return {
     id: tweet.id ?? "",
     text: tweet.text ?? "",
-    author: resolveAuthor(tweet.author_id, users),
+    author: author?.username ? `@${author.username}` : (tweet.author_id ?? "unknown"),
+    author_followers: authorFollowers,
+    author_ratio: author ? followerRatio(authorFollowers, authorFollowing) : 0,
     likes: metrics?.like_count ?? 0,
     retweets: metrics?.retweet_count ?? 0,
     replies: metrics?.reply_count ?? 0,
+    is_reply_to: repliedTo?.id ?? null,
     created_at: tweet.created_at ?? "",
   };
-
-  if (repliedTo?.id) {
-    result.is_reply_to = repliedTo.id;
-  }
-
-  return result;
 }
 
 export function compactUser(user: UserLike): CompactUser {
