@@ -291,10 +291,13 @@ Once connected, you have access to these tools (prefixed with `mcp__x-twitter__`
 - **get_user** -- Lookup by username or ID. Parameters: `username` OR `user_id`
 - **get_followers** -- List followers. Parameters: `user` (username or numeric ID), `max_results`, `next_token`
 - **get_following** -- List following. Parameters: `user` (username or numeric ID), `max_results`, `next_token`
+- **get_non_followers** -- Find accounts you follow that don't follow back. Parameters: `max_pages` (default 5, each page = 1000 users). Sorted by follower count ascending (lowest quality first).
 
 ### Engagement
 - **like_tweet** -- Like a tweet. Parameters: `tweet_id` (ID or URL)
 - **retweet** -- Retweet. Parameters: `tweet_id` (ID or URL)
+- **follow_user** -- Follow a user. Parameters: `user` (username or numeric ID). Budget-limited (default 10/day).
+- **unfollow_user** -- Unfollow a user. Parameters: `user` (username or numeric ID). **Hidden by default** -- only available when `X_MCP_ENABLE_DANGEROUS=true`.
 
 ### Media
 - **upload_media** -- Upload image/video (base64). Parameters: `media_data`, `mime_type`, `media_category`
@@ -313,6 +316,86 @@ For `search_tweets`, the `query` parameter supports X's full search syntax:
 - `is:reply` / `-is:retweet`
 - `lang:en` -- language filter
 - Combine terms with spaces (AND) or `OR`
+
+## Example Responses
+
+Responses use TOON format by default (field names once in header, CSV-style rows for arrays). Every response includes `rate_limit` and `budget`.
+
+**Tweet list** (get_timeline, search_tweets, get_mentions):
+```
+data[2]{id,text,author,author_followers,author_ratio,likes,retweets,replies,is_reply_to,created_at}:
+  "1893660912",Build agents not wrappers,@karpathy,3940281,118.6,4521,312,89,null,"2026-02-23T17:00:01.000Z"
+  "1893660913",Hot take: MCP is underrated,@swyx,98200,3.2,210,45,12,null,"2026-02-23T16:30:00.000Z"
+meta:
+  result_count: 2
+  next_token: abc123
+rate_limit: 299/300 (900s)
+budget: "3/8 replies, 0/2 originals, 5/20 likes, 1/5 retweets, 0/10 follows"
+```
+
+- `author_followers`: raw follower count
+- `author_ratio`: followers/following (precomputed, e.g., 118.6 means 118x more followers than following)
+- `is_reply_to`: tweet ID this is replying to, or `null` for standalone tweets
+
+**Single tweet** (get_tweet):
+```
+data:
+  id: "1893660912"
+  text: Build agents not wrappers
+  author: "@karpathy"
+  author_followers: 3940281
+  author_ratio: 118.6
+  likes: 4521
+  retweets: 312
+  replies: 89
+  is_reply_to: null
+  created_at: "2026-02-23T17:00:01.000Z"
+rate_limit: 299/300 (900s)
+budget: "3/8 replies, 0/2 originals, 5/20 likes, 1/5 retweets, 0/10 follows"
+```
+
+**User profile** (get_user):
+```
+data:
+  id: "43859239"
+  username: JohannesHoppe
+  name: Johannes Hoppe
+  followers: 1234
+  following: 567
+  tweets: 890
+  bio: Building things with TypeScript and AI
+rate_limit: 299/300 (900s)
+budget: "0/8 replies, 0/2 originals, 0/20 likes, 0/5 retweets, 0/10 follows"
+```
+
+**User list** (get_followers, get_following, get_non_followers):
+```
+data[2]{id,username,name,followers,following,tweets,bio}:
+  "123456",alice_dev,Alice,8900,450,1200,Full-stack engineer
+  "789012",bob_ai,Bob,340,120,890,ML researcher
+meta:
+  result_count: 2
+  next_token: def456
+rate_limit: 14/15 (900s)
+budget: "0/8 replies, 0/2 originals, 0/20 likes, 0/5 retweets, 0/10 follows"
+```
+
+**Write result** (post_tweet, reply_to_tweet, quote_tweet):
+```
+data:
+  id: "1893661000"
+  text: Hello world!
+rate_limit: 199/200 (900s)
+budget: "0/8 replies, 1/2 originals, 0/20 likes, 0/5 retweets, 0/10 follows | last action: 0s ago"
+```
+
+**Engagement result** (like_tweet, retweet, follow_user):
+```
+data:
+  liked: true
+rate_limit: 199/200 (900s)
+budget: "0/8 replies, 0/2 originals, 1/20 likes, 0/5 retweets, 0/10 follows | last action: 0s ago"
+```
 
 ## Common Patterns
 
