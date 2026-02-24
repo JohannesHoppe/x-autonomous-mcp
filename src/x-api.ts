@@ -308,7 +308,7 @@ export class XApiClient {
       max_results: Math.min(Math.max(maxResults, 5), 100).toString(),
       "tweet.fields": "created_at,public_metrics,author_id,conversation_id,entities,lang",
       expansions: "author_id",
-      "user.fields": "name,username,verified",
+      "user.fields": "name,username,verified,public_metrics",
     });
     if (nextToken) params.set("pagination_token", nextToken);
 
@@ -321,9 +321,9 @@ export class XApiClient {
     const userId = await this.getAuthenticatedUserId();
     const params = new URLSearchParams({
       max_results: Math.min(Math.max(maxResults, 5), 100).toString(),
-      "tweet.fields": "created_at,public_metrics,author_id,conversation_id",
+      "tweet.fields": "created_at,public_metrics,author_id,conversation_id,entities,lang",
       expansions: "author_id",
-      "user.fields": "name,username,verified",
+      "user.fields": "name,username,verified,public_metrics",
     });
     if (nextToken) params.set("pagination_token", nextToken);
     if (sinceId) params.set("since_id", sinceId);

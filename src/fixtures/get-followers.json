@@ -1,0 +1,90 @@
+{
+  "_source": "Live X API response captured 2026-02-24. DO NOT EDIT — frozen fixture.",
+  "_endpoint": "GET /2/users/43859239/followers?max_results=5&user.fields=created_at,description,public_metrics,verified",
+  "data": [
+    {
+      "name": "Mark",
+      "created_at": "2023-11-23T22:20:42.000Z",
+      "public_metrics": {
+        "followers_count": 27,
+        "following_count": 549,
+        "tweet_count": 0,
+        "listed_count": 0,
+        "like_count": 1,
+        "media_count": 0
+      },
+      "description": "",
+      "username": "Mark3e8",
+      "id": "1727814349949935616",
+      "verified": false
+    },
+    {
+      "name": "Bram",
+      "created_at": "2010-04-26T17:36:04.000Z",
+      "public_metrics": {
+        "followers_count": 66,
+        "following_count": 508,
+        "tweet_count": 26,
+        "listed_count": 3,
+        "like_count": 223,
+        "media_count": 0
+      },
+      "description": "Software Engineer, Web Frontend Development | Angular @showpad",
+      "username": "brampeirs",
+      "id": "137411903",
+      "verified": false
+    },
+    {
+      "name": "Sumit Kesarwani",
+      "created_at": "2023-08-24T14:59:35.000Z",
+      "public_metrics": {
+        "followers_count": 1052,
+        "following_count": 1030,
+        "tweet_count": 109,
+        "listed_count": 0,
+        "like_count": 143,
+        "media_count": 11
+      },
+      "description": "Top 1% on Topmate | Ex-Intern IIT-Bombay, Mittal Alliance , Promptly-AI | Knight (Max. 1900)@LeetCode | Full Stack Developer | 1500+ CP Qs Solved |  Freelancer",
+      "username": "Sumitboy_007",
+      "id": "1694726070493405184",
+      "verified": false
+    },
+    {
+      "name": "Joel Kesler",
+      "created_at": "2008-07-14T01:52:28.000Z",
+      "public_metrics": {
+        "followers_count": 119,
+        "following_count": 842,
+        "tweet_count": 7689,
+        "listed_count": 26,
+        "like_count": 27210,
+        "media_count": 111
+      },
+      "description": "Stuff and nonsense",
+      "username": "joelkesler",
+      "id": "15421323",
+      "verified": false
+    },
+    {
+      "name": "vamshi",
+      "created_at": "2014-04-11T16:08:36.000Z",
+      "public_metrics": {
+        "followers_count": 11,
+        "following_count": 200,
+        "tweet_count": 11,
+        "listed_count": 0,
+        "like_count": 7402,
+        "media_count": 1
+      },
+      "description": "",
+      "username": "vamshis211",
+      "id": "2438738006",
+      "verified": false
+    }
+  ],
+  "meta": {
+    "result_count": 5,
+    "next_token": "AUVBQ06V4N11IZZZ"
+  }
+}

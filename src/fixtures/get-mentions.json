@@ -1,19 +1,8 @@
 {
   "_source": "Live X API response captured 2026-02-24. DO NOT EDIT — frozen fixture.",
-  "_endpoint": "GET /2/users/43859239/mentions?max_results=5&tweet.fields=created_at,public_metrics,author_id,conversation_id,entities,lang&expansions=author_id&user.fields=name,username,verified",
+  "_endpoint": "GET /2/users/43859239/mentions?max_results=5&tweet.fields=created_at,public_metrics,author_id,conversation_id,entities,lang&expansions=author_id&user.fields=name,username,verified,public_metrics",
   "data": [
     {
-      "entities": {
-        "mentions": [
-          { "start": 0, "end": 14, "username": "JohannesHoppe", "id": "43859239" },
-          { "start": 15, "end": 23, "username": "angular", "id": "202230373" },
-          { "start": 24, "end": 37, "username": "angular_buch", "id": "842675227876319232" },
-          { "start": 38, "end": 49, "username": "fmalcher01", "id": "1979177082" }
-        ]
-      },
-      "author_id": "877708647706570753",
-      "text": "@JohannesHoppe @angular @angular_buch @fmalcher01 congrats man. great to see you launch the physical book after all that work.",
-      "lang": "en",
       "public_metrics": {
         "retweet_count": 0,
         "reply_count": 1,
@@ -23,28 +12,126 @@
         "impression_count": 4
       },
       "conversation_id": "1623278568682790913",
-      "id": "2025938574135206063",
+      "lang": "en",
+      "author_id": "877708647706570753",
+      "text": "@JohannesHoppe @angular @angular_buch @fmalcher01 congrats man. great to see you launch the physical book after all that work.",
       "created_at": "2026-02-23T14:19:30.000Z",
-      "edit_history_tweet_ids": ["2025938574135206063"]
+      "id": "2025938574135206063",
+      "entities": {
+        "mentions": [
+          {
+            "start": 0,
+            "end": 14,
+            "username": "JohannesHoppe",
+            "id": "43859239"
+          },
+          {
+            "start": 15,
+            "end": 23,
+            "username": "angular",
+            "id": "202230373"
+          },
+          {
+            "start": 24,
+            "end": 37,
+            "username": "angular_buch",
+            "id": "842675227876319232"
+          },
+          {
+            "start": 38,
+            "end": 49,
+            "username": "fmalcher01",
+            "id": "1979177082"
+          }
+        ]
+      },
+      "edit_history_tweet_ids": [
+        "2025938574135206063"
+      ]
+    },
+    {
+      "public_metrics": {
+        "retweet_count": 0,
+        "reply_count": 0,
+        "like_count": 0,
+        "quote_count": 0,
+        "bookmark_count": 0,
+        "impression_count": 5
+      },
+      "conversation_id": "1623278568682790913",
+      "lang": "en",
+      "author_id": "877384654197637120",
+      "text": "@JohannesHoppe @angular @angular_buch @fmalcher01 congrats man. great to see you launch the physical book after all that work.",
+      "created_at": "2026-02-23T13:49:52.000Z",
+      "id": "2025931114498461890",
+      "entities": {
+        "mentions": [
+          {
+            "start": 0,
+            "end": 14,
+            "username": "JohannesHoppe",
+            "id": "43859239"
+          },
+          {
+            "start": 15,
+            "end": 23,
+            "username": "angular",
+            "id": "202230373"
+          },
+          {
+            "start": 24,
+            "end": 37,
+            "username": "angular_buch",
+            "id": "842675227876319232"
+          },
+          {
+            "start": 38,
+            "end": 49,
+            "username": "fmalcher01",
+            "id": "1979177082"
+          }
+        ]
+      },
+      "edit_history_tweet_ids": [
+        "2025931114498461890"
+      ]
     },
     {
       "entities": {
-        "mentions": [
-          { "start": 0, "end": 14, "username": "JohannesHoppe", "id": "43859239" },
-          { "start": 15, "end": 23, "username": "angular", "id": "202230373" },
-          { "start": 24, "end": 37, "username": "angular_buch", "id": "842675227876319232" },
-          { "start": 38, "end": 53, "username": "angular_schule", "id": "857968017329840128" },
-          { "start": 54, "end": 68, "username": "AngularLovePL", "id": "1318157241179119616" }
-        ],
-        "annotations": [
-          { "start": 69, "end": 71, "probability": 0.68, "type": "Other", "normalized_text": "MCP" },
-          { "start": 134, "end": 140, "probability": 0.721, "type": "Other", "normalized_text": "Generic" },
-          { "start": 142, "end": 145, "probability": 0.5746, "type": "Other", "normalized_text": "LLMs" }
+        "urls": [
+          {
+            "start": 0,
+            "end": 23,
+            "url": "https://t.co/VipISwMyAx",
+            "expanded_url": "http://x.com/i/article/2023818217362231296",
+            "display_url": "x.com/i/article/2023…",
+            "status": 500,
+            "unwound_url": "https://x.com/i/article/2023818217362231296"
+          }
         ]
       },
-      "author_id": "129786608",
-      "text": "@JohannesHoppe @angular @angular_buch @angular_schule @AngularLovePL MCP servers are the missing piece for framework-specific agents. Generic LLMs hallucinate framework patterns constantly\u2014having Angular-aware tooling that enforces best practices at the agent level is huge.",
-      "lang": "en",
+      "public_metrics": {
+        "retweet_count": 13,
+        "reply_count": 0,
+        "like_count": 57,
+        "quote_count": 1,
+        "bookmark_count": 16,
+        "impression_count": 12983
+      },
+      "article": {
+        "title": "Angular 21: Internal Mechanics, ARIA, and AI-Powered Coding! 🚀 "
+      },
+      "conversation_id": "2023819063890235839",
+      "lang": "zxx",
+      "author_id": "202230373",
+      "text": "https://t.co/VipISwMyAx",
+      "created_at": "2026-02-17T17:57:20.000Z",
+      "id": "2023819063890235839",
+      "edit_history_tweet_ids": [
+        "2023819063890235839"
+      ]
+    },
+    {
       "public_metrics": {
         "retweet_count": 0,
         "reply_count": 0,
@@ -54,21 +141,172 @@
         "impression_count": 49
       },
       "conversation_id": "2021532465769144497",
-      "id": "2021543621389094962",
+      "lang": "en",
+      "author_id": "129786608",
+      "text": "@JohannesHoppe @angular @angular_buch @angular_schule @AngularLovePL MCP servers are the missing piece for framework-specific agents. Generic LLMs hallucinate framework patterns constantly—having Angular-aware tooling that enforces best practices at the agent level is huge.",
       "created_at": "2026-02-11T11:15:32.000Z",
-      "edit_history_tweet_ids": ["2021543621389094962"]
+      "id": "2021543621389094962",
+      "entities": {
+        "annotations": [
+          {
+            "start": 69,
+            "end": 71,
+            "probability": 0.68,
+            "type": "Other",
+            "normalized_text": "MCP"
+          },
+          {
+            "start": 134,
+            "end": 140,
+            "probability": 0.721,
+            "type": "Other",
+            "normalized_text": "Generic"
+          },
+          {
+            "start": 142,
+            "end": 145,
+            "probability": 0.5746,
+            "type": "Other",
+            "normalized_text": "LLMs"
+          }
+        ],
+        "mentions": [
+          {
+            "start": 0,
+            "end": 14,
+            "username": "JohannesHoppe",
+            "id": "43859239"
+          },
+          {
+            "start": 15,
+            "end": 23,
+            "username": "angular",
+            "id": "202230373"
+          },
+          {
+            "start": 24,
+            "end": 37,
+            "username": "angular_buch",
+            "id": "842675227876319232"
+          },
+          {
+            "start": 38,
+            "end": 53,
+            "username": "angular_schule",
+            "id": "857968017329840128"
+          },
+          {
+            "start": 54,
+            "end": 68,
+            "username": "AngularLovePL",
+            "id": "1318157241179119616"
+          }
+        ]
+      },
+      "edit_history_tweet_ids": [
+        "2021543621389094962"
+      ]
+    },
+    {
+      "entities": {
+        "urls": [
+          {
+            "start": 0,
+            "end": 23,
+            "url": "https://t.co/gIt2e9gxa4",
+            "expanded_url": "http://x.com/i/article/2020886910697181185",
+            "display_url": "x.com/i/article/2020…",
+            "status": 500,
+            "unwound_url": "http://x.com/i/article/2020886910697181185"
+          }
+        ]
+      },
+      "public_metrics": {
+        "retweet_count": 8,
+        "reply_count": 1,
+        "like_count": 39,
+        "quote_count": 2,
+        "bookmark_count": 7,
+        "impression_count": 10492
+      },
+      "article": {
+        "title": "Global Expertise: AI Blueprints, Resource API Fixes, and Angular v20 🌍"
+      },
+      "conversation_id": "2020887181401727100",
+      "lang": "zxx",
+      "author_id": "202230373",
+      "text": "https://t.co/gIt2e9gxa4",
+      "created_at": "2026-02-09T15:47:04.000Z",
+      "id": "2020887181401727100",
+      "edit_history_tweet_ids": [
+        "2020887181401727100"
+      ]
     }
   ],
   "includes": {
     "users": [
-      { "verified": false, "name": "Sohom", "username": "ScalerSohom", "id": "877708647706570753" },
-      { "verified": false, "name": "Amey Pandit", "username": "panditamey1", "id": "129786608" }
+      {
+        "id": "877708647706570753",
+        "public_metrics": {
+          "followers_count": 440,
+          "following_count": 191,
+          "tweet_count": 18576,
+          "listed_count": 1,
+          "like_count": 24207,
+          "media_count": 3
+        },
+        "verified": false,
+        "name": "Sohom",
+        "username": "ScalerSohom"
+      },
+      {
+        "id": "877384654197637120",
+        "public_metrics": {
+          "followers_count": 4201,
+          "following_count": 6738,
+          "tweet_count": 98479,
+          "listed_count": 75,
+          "like_count": 138296,
+          "media_count": 539
+        },
+        "verified": false,
+        "name": "Sohom Mukherjee",
+        "username": "thesohom2"
+      },
+      {
+        "id": "202230373",
+        "public_metrics": {
+          "followers_count": 492874,
+          "following_count": 304,
+          "tweet_count": 4783,
+          "listed_count": 5388,
+          "like_count": 5315,
+          "media_count": 822
+        },
+        "verified": true,
+        "name": "Angular",
+        "username": "angular"
+      },
+      {
+        "id": "129786608",
+        "public_metrics": {
+          "followers_count": 45,
+          "following_count": 194,
+          "tweet_count": 461,
+          "listed_count": 0,
+          "like_count": 158,
+          "media_count": 2
+        },
+        "verified": false,
+        "name": "Amey Pandit",
+        "username": "panditamey1"
+      }
     ]
   },
   "meta": {
-    "result_count": 2,
+    "result_count": 5,
     "newest_id": "2025938574135206063",
-    "oldest_id": "2021543621389094962",
+    "oldest_id": "2020887181401727100",
     "next_token": "7140dibdnow9c7btwoxgu72kgfgrh27o1krdv3yxiw3lc"
   }
 }

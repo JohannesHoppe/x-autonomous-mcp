@@ -2,7 +2,7 @@
 
 ## What This Is
 
-An autonomous MCP (Model Context Protocol) server for the X (Twitter) API v2. Built-in safety rails for unattended LLM agent operation: daily budget limits, engagement dedup, TOON-encoded responses, Levenshtein-based parameter suggestions, destructive tool gating. Based on [Infatoshi/x-mcp](https://github.com/Infatoshi/x-mcp).
+An autonomous MCP (Model Context Protocol) server for the X (Twitter) API v2. Built-in safety rails for unattended LLM agent operation: daily budget limits, engagement dedup, TOON-encoded responses, Levenshtein-based parameter suggestions, destructive tool gating. Based on [Infatoshi/x-mcp](https://github.com/Infatoshi/x-mcp) (MIT, [@Infatoshi](https://github.com/Infatoshi)).
 
 ## Architecture
 
@@ -89,3 +89,26 @@ X_MCP_STATE_FILE       # State file path (default: {cwd}/x-mcp-state.json)
 4. Token efficiency matters. Don't add fields to API requests unless they're actually used.
 5. Run `npm test` before every commit.
 6. All timestamps must be ISO 8601.
+
+## NEVER INVENT TEST DATA OR API RESPONSES
+
+**THIS IS A HARD RULE. NO EXCEPTIONS.**
+
+- **NEVER** fabricate fixture files and label them as "real API responses"
+- **NEVER** add made-up fields (e.g. `public_metrics`) to existing real fixtures
+- **NEVER** create JSON files with invented usernames, follower counts, tweet IDs, or any other data and commit them as if they came from the X API
+- If you need test data that doesn't exist yet, **FETCH IT FROM THE LIVE API** (SSH to the Mac Mini, use Bearer Token, capture the real response)
+- If you cannot fetch it, **say so** — do not silently invent data to fill the gap
+- Frozen fixtures in `src/fixtures/` are sacred: they are byte-for-byte copies of real X API responses. The `_source` and `_endpoint` fields in each fixture are a contract — they mean the data was actually fetched from that endpoint on that date.
+
+## Test Pattern: Frozen Fixtures
+
+All integration tests follow this pattern:
+
+1. **Capture** a real X API response (e.g. via `curl` with Bearer Token on the Mac Mini)
+2. **Save** the raw JSON to `src/fixtures/<endpoint-name>.json` with `_source` and `_endpoint` metadata
+3. **Never edit** the fixture after saving — it's a frozen snapshot of the real API
+4. **Write tests** that load the fixture with `loadFixture()` and assert on the real field shapes, values, and compact transformation output
+5. **If the API changes**, re-capture a new fixture — don't patch the old one
+
+This ensures tests prove the code works against actual X API response shapes, not hand-crafted mocks. If someone changes `compactResponse()` and breaks it for real API data, these tests catch it.

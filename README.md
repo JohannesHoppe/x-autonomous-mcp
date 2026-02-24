@@ -586,7 +586,7 @@ The `search_tweets` tool supports X's full query language:
 
 ## Credits
 
-Based on [Infatoshi/x-mcp](https://github.com/Infatoshi/x-mcp) by [@Infatoshi](https://github.com/Infatoshi).
+Based on [Infatoshi/x-mcp](https://github.com/Infatoshi/x-mcp) (MIT, [@Infatoshi](https://github.com/Infatoshi)).
 
 TOON encoder vendored from [@toon-format/toon](https://github.com/toon-format/toon) (MIT, [Johann Schopplich](https://github.com/johannschopplich)).
 

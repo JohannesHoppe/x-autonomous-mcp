@@ -1,12 +1,11 @@
 {
   "_source": "Live X API response captured 2026-02-24. DO NOT EDIT — frozen fixture.",
-  "_endpoint": "GET /2/users/43859239/tweets?max_results=5&tweet.fields=created_at,public_metrics,author_id,conversation_id,entities,lang&expansions=author_id&user.fields=name,username,verified,public_metrics",
+  "_endpoint": "GET /2/tweets/search/recent?query=from:JohannesHoppe&max_results=10&tweet.fields=created_at,public_metrics,author_id,conversation_id,entities,lang&expansions=author_id&user.fields=name,username,verified,public_metrics",
   "data": [
     {
+      "author_id": "43859239",
+      "text": "I wrote a deep dive to get you started with Claude Code and 🅰️ Angular development! AI first!\n\n→ Your first Angular project with Claude Code\n→ CLAUDE .md & Angular MCP server\n→ Plan mode & extended thinking\n→ Git integration & plugins\n→ Docker Sandbox & CI pipelines",
       "id": "2025978969628238333",
-      "edit_history_tweet_ids": [
-        "2025978969628238333"
-      ],
       "conversation_id": "2025978969628238333",
       "entities": {
         "annotations": [
@@ -40,8 +39,11 @@
           }
         ]
       },
+      "edit_history_tweet_ids": [
+        "2025978969628238333"
+      ],
+      "created_at": "2026-02-23T17:00:01.000Z",
       "lang": "en",
-      "text": "I wrote a deep dive to get you started with Claude Code and 🅰️ Angular development! AI first!\n\n→ Your first Angular project with Claude Code\n→ CLAUDE .md & Angular MCP server\n→ Plan mode & extended thinking\n→ Git integration & plugins\n→ Docker Sandbox & CI pipelines",
       "public_metrics": {
         "retweet_count": 2,
         "reply_count": 0,
@@ -49,16 +51,10 @@
         "quote_count": 0,
         "bookmark_count": 15,
         "impression_count": 903
-      },
-      "author_id": "43859239",
-      "created_at": "2026-02-23T17:00:01.000Z"
+      }
     },
     {
-      "id": "2025951895404077217",
-      "edit_history_tweet_ids": [
-        "2025951895404077217"
-      ],
-      "conversation_id": "1623278568682790913",
+      "author_id": "43859239",
       "entities": {
         "mentions": [
           {
@@ -87,8 +83,14 @@
           }
         ]
       },
-      "lang": "en",
       "text": "@ScalerSohom @angular @angular_buch @fmalcher01 You fucking reply guy bots should at least write different comments.",
+      "id": "2025951895404077217",
+      "conversation_id": "1623278568682790913",
+      "edit_history_tweet_ids": [
+        "2025951895404077217"
+      ],
+      "created_at": "2026-02-23T15:12:26.000Z",
+      "lang": "en",
       "public_metrics": {
         "retweet_count": 0,
         "reply_count": 0,
@@ -96,17 +98,19 @@
         "quote_count": 0,
         "bookmark_count": 0,
         "impression_count": 2
-      },
-      "author_id": "43859239",
-      "created_at": "2026-02-23T15:12:26.000Z"
+      }
     },
     {
-      "id": "2025288842702475341",
-      "edit_history_tweet_ids": [
-        "2025288842702475341"
-      ],
-      "conversation_id": "2025288842702475341",
+      "author_id": "43859239",
       "entities": {
+        "mentions": [
+          {
+            "start": 3,
+            "end": 17,
+            "username": "JohannesHoppe",
+            "id": "43859239"
+          }
+        ],
         "annotations": [
           {
             "start": 44,
@@ -115,18 +119,16 @@
             "type": "Other",
             "normalized_text": "Claude Code"
           }
-        ],
-        "mentions": [
-          {
-            "start": 3,
-            "end": 17,
-            "username": "JohannesHoppe",
-            "id": "43859239"
-          }
         ]
       },
-      "lang": "en",
       "text": "RT @JohannesHoppe: The single most reported Claude Code bug finally has a fix!\n\nEndless scrolling, terminal flickering! Almost a year, thou…",
+      "id": "2025288842702475341",
+      "conversation_id": "2025288842702475341",
+      "edit_history_tweet_ids": [
+        "2025288842702475341"
+      ],
+      "created_at": "2026-02-21T19:17:42.000Z",
+      "lang": "en",
       "public_metrics": {
         "retweet_count": 2,
         "reply_count": 0,
@@ -134,26 +136,11 @@
         "quote_count": 0,
         "bookmark_count": 0,
         "impression_count": 0
-      },
-      "author_id": "43859239",
-      "created_at": "2026-02-21T19:17:42.000Z"
+      }
     },
     {
-      "id": "2025251798139769114",
-      "edit_history_tweet_ids": [
-        "2025251798139769114"
-      ],
-      "conversation_id": "2025251798139769114",
+      "author_id": "43859239",
       "entities": {
-        "annotations": [
-          {
-            "start": 26,
-            "end": 36,
-            "probability": 0.7422,
-            "type": "Other",
-            "normalized_text": "Claude Code"
-          }
-        ],
         "urls": [
           {
             "start": 279,
@@ -163,10 +150,25 @@
             "display_url": "pic.x.com/dhUmbbGPuh",
             "media_key": "3_2025251773892452352"
           }
+        ],
+        "annotations": [
+          {
+            "start": 26,
+            "end": 36,
+            "probability": 0.7422,
+            "type": "Other",
+            "normalized_text": "Claude Code"
+          }
         ]
       },
-      "lang": "en",
       "text": "I added this to my global Claude Code rules:\n\n**NEVER** write research agent output directly into documentation or code without verifying it\n**ALWAYS** verify claims against actual source code, bundled docs, or observed behavior (run the command, read the log, check the output) https://t.co/dhUmbbGPuh",
+      "id": "2025251798139769114",
+      "conversation_id": "2025251798139769114",
+      "edit_history_tweet_ids": [
+        "2025251798139769114"
+      ],
+      "created_at": "2026-02-21T16:50:30.000Z",
+      "lang": "en",
       "public_metrics": {
         "retweet_count": 0,
         "reply_count": 0,
@@ -174,33 +176,11 @@
         "quote_count": 0,
         "bookmark_count": 5,
         "impression_count": 288
-      },
-      "author_id": "43859239",
-      "created_at": "2026-02-21T16:50:30.000Z"
+      }
     },
     {
-      "id": "2024891807432151372",
-      "edit_history_tweet_ids": [
-        "2024891807432151372"
-      ],
-      "conversation_id": "2024891807432151372",
+      "author_id": "43859239",
       "entities": {
-        "annotations": [
-          {
-            "start": 25,
-            "end": 35,
-            "probability": 0.7282,
-            "type": "Other",
-            "normalized_text": "Claude Code"
-          },
-          {
-            "start": 155,
-            "end": 163,
-            "probability": 0.6264,
-            "type": "Other",
-            "normalized_text": "Anthropic"
-          }
-        ],
         "urls": [
           {
             "start": 234,
@@ -217,10 +197,32 @@
             "display_url": "pic.x.com/4JMsRD3moN",
             "media_key": "13_2024526871652651008"
           }
+        ],
+        "annotations": [
+          {
+            "start": 25,
+            "end": 35,
+            "probability": 0.7282,
+            "type": "Other",
+            "normalized_text": "Claude Code"
+          },
+          {
+            "start": 155,
+            "end": 163,
+            "probability": 0.6264,
+            "type": "Other",
+            "normalized_text": "Anthropic"
+          }
         ]
       },
-      "lang": "en",
       "text": "The single most reported Claude Code bug finally has a fix!\n\nEndless scrolling, terminal flickering! Almost a year, thousands of upvotes, no solution from Anthropic. But an open-source tool solves it. Two commands. Done.\n\nLearn more: https://t.co/SaMoFdvThP https://t.co/4JMsRD3moN",
+      "id": "2024891807432151372",
+      "conversation_id": "2024891807432151372",
+      "edit_history_tweet_ids": [
+        "2024891807432151372"
+      ],
+      "created_at": "2026-02-20T17:00:02.000Z",
+      "lang": "en",
       "public_metrics": {
         "retweet_count": 2,
         "reply_count": 0,
@@ -228,14 +230,15 @@
         "quote_count": 0,
         "bookmark_count": 3,
         "impression_count": 745
-      },
-      "author_id": "43859239",
-      "created_at": "2026-02-20T17:00:02.000Z"
+      }
     }
   ],
   "includes": {
     "users": [
       {
+        "name": "Johannes Hoppe 🅰️",
+        "id": "43859239",
+        "username": "JohannesHoppe",
         "verified": false,
         "public_metrics": {
           "followers_count": 3159,
@@ -244,17 +247,13 @@
           "listed_count": 95,
           "like_count": 1938,
           "media_count": 611
-        },
-        "id": "43859239",
-        "name": "Johannes Hoppe 🅰️",
-        "username": "JohannesHoppe"
+        }
       }
     ]
   },
   "meta": {
-    "result_count": 5,
     "newest_id": "2025978969628238333",
     "oldest_id": "2024891807432151372",
-    "next_token": "7140dibdnow9c7btwoxguflh38no5vq77887684jhtn3m"
+    "result_count": 5
   }
 }

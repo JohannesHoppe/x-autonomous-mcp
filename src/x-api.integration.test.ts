@@ -20,6 +20,7 @@ import { XApiClient } from "./x-api.js";
 import { compactResponse, type CompactTweet, type CompactUser } from "./compact.js";
 import { getDefaultState, type StateFile } from "./state.js";
 import { recordAction, formatBudgetString, loadBudgetConfig } from "./safety.js";
+import { formatResult } from "./helpers.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -396,7 +397,7 @@ describe("frozen fixture: get-timeline", () => {
   };
 
   it("fixture has expected raw X API tweet fields", () => {
-    expect(fixture.data.length).toBeGreaterThan(0);
+    expect(fixture.data.length).toBe(5);
 
     const tweet = fixture.data[0];
     expect(typeof tweet.id).toBe("string");
@@ -416,12 +417,19 @@ describe("frozen fixture: get-timeline", () => {
     expect(typeof metrics.impression_count).toBe("number");
   });
 
-  it("fixture includes author expansion", () => {
+  it("fixture includes author expansion with public_metrics", () => {
     expect(fixture.includes.users.length).toBeGreaterThan(0);
     const author = fixture.includes.users[0];
     expect(author.username).toBe("JohannesHoppe");
     expect(typeof author.name).toBe("string");
     expect(typeof author.verified).toBe("boolean");
+
+    // User expansion now includes public_metrics
+    const userMetrics = author.public_metrics as Record<string, number>;
+    expect(typeof userMetrics.followers_count).toBe("number");
+    expect(typeof userMetrics.following_count).toBe("number");
+    expect(userMetrics.followers_count).toBe(3159);
+    expect(userMetrics.following_count).toBe(1983);
   });
 
   it("fixture has pagination meta", () => {
@@ -431,14 +439,14 @@ describe("frozen fixture: get-timeline", () => {
     expect(typeof fixture.meta.next_token).toBe("string");
   });
 
-  it("compactResponse produces valid CompactTweet array", () => {
+  it("compactResponse produces valid CompactTweet array with author_followers", () => {
     const compacted = compactResponse(fixture) as {
       data: CompactTweet[];
       meta: Record<string, unknown>;
     };
 
     expect(Array.isArray(compacted.data)).toBe(true);
-    expect(compacted.data.length).toBe(fixture.data.length);
+    expect(compacted.data.length).toBe(5);
 
     const tweet = compacted.data[0];
     expect(tweet.id).toBe("2025978969628238333");
@@ -449,9 +457,13 @@ describe("frozen fixture: get-timeline", () => {
     expect(typeof tweet.replies).toBe("number");
     expect(typeof tweet.created_at).toBe("string");
 
+    // author_followers and author_ratio should be populated from user expansion
+    expect(tweet.author_followers).toBe(3159);
+    expect(tweet.author_ratio).toBeGreaterThan(1); // 3159/1983 ≈ 1.59
+
     // Meta should be preserved (compact strips newest_id/oldest_id)
     expect(compacted.meta).toBeDefined();
-    expect(compacted.meta.result_count).toBe(fixture.meta.result_count);
+    expect(compacted.meta.result_count).toBe(5);
     expect(compacted.meta.next_token).toBe(fixture.meta.next_token);
     expect(compacted.meta.newest_id).toBeUndefined();
     expect(compacted.meta.oldest_id).toBeUndefined();
@@ -473,7 +485,7 @@ describe("frozen fixture: get-mentions", () => {
   };
 
   it("fixture has expected raw X API mention fields", () => {
-    expect(fixture.data.length).toBeGreaterThan(0);
+    expect(fixture.data.length).toBe(5);
 
     const mention = fixture.data[0];
     expect(typeof mention.id).toBe("string");
@@ -488,12 +500,27 @@ describe("frozen fixture: get-mentions", () => {
     expect(typeof metrics.like_count).toBe("number");
   });
 
-  it("fixture includes mentioning users expansion", () => {
-    expect(fixture.includes.users.length).toBeGreaterThan(0);
+  it("fixture includes mentioning users with public_metrics", () => {
+    expect(fixture.includes.users.length).toBe(4);
     const user = fixture.includes.users[0];
     expect(typeof user.id).toBe("string");
     expect(typeof user.username).toBe("string");
     expect(typeof user.name).toBe("string");
+
+    // User expansion includes public_metrics
+    const userMetrics = user.public_metrics as Record<string, number>;
+    expect(typeof userMetrics.followers_count).toBe("number");
+    expect(typeof userMetrics.following_count).toBe("number");
+  });
+
+  it("fixture includes verified @angular account", () => {
+    const angular = fixture.includes.users.find(
+      (u) => (u as { username: string }).username === "angular",
+    ) as Record<string, unknown>;
+    expect(angular).toBeDefined();
+    expect(angular.verified).toBe(true);
+    const metrics = angular.public_metrics as Record<string, number>;
+    expect(metrics.followers_count).toBeGreaterThan(100000);
   });
 
   it("compactResponse produces CompactTweet array with different authors", () => {
@@ -503,21 +530,198 @@ describe("frozen fixture: get-mentions", () => {
     };
 
     expect(Array.isArray(compacted.data)).toBe(true);
-    expect(compacted.data.length).toBe(fixture.data.length);
+    expect(compacted.data.length).toBe(5);
 
     // Mentions come from OTHER users, so authors should be resolved
     const tweet = compacted.data[0];
-    expect(typeof tweet.author).toBe("string");
     expect(tweet.author).toBe("@ScalerSohom"); // from includes.users
+    expect(tweet.author_followers).toBe(440);
     expect(typeof tweet.likes).toBe("number");
     expect(typeof tweet.retweets).toBe("number");
 
-    // Second mention
+    // Second mention — different author
     const tweet2 = compacted.data[1];
-    expect(tweet2.author).toBe("@panditamey1");
+    expect(tweet2.author).toBe("@thesohom2");
+    expect(tweet2.author_followers).toBe(4201);
+
+    // Third mention — from @angular (verified, 492K+ followers)
+    const tweet3 = compacted.data[2];
+    expect(tweet3.author).toBe("@angular");
+    expect(tweet3.author_followers).toBe(492874);
+    expect(tweet3.author_ratio).toBeGreaterThan(1000); // 492874/304 ≈ 1621
 
     // Meta preserved
     expect(compacted.meta).toBeDefined();
-    expect(typeof compacted.meta.result_count).toBe("number");
+    expect(compacted.meta.result_count).toBe(5);
+  });
+});
+
+describe("frozen fixture: search-tweets", () => {
+  const fixture = loadFixture("search-tweets.json") as {
+    data: Array<Record<string, unknown>>;
+    includes: { users: Array<Record<string, unknown>> };
+    meta: Record<string, unknown>;
+  };
+
+  it("fixture has expected raw X API search result fields", () => {
+    expect(fixture.data.length).toBe(5);
+
+    const tweet = fixture.data[0];
+    expect(typeof tweet.id).toBe("string");
+    expect(typeof tweet.text).toBe("string");
+    expect(typeof tweet.author_id).toBe("string");
+    expect(typeof tweet.created_at).toBe("string");
+    expect(typeof tweet.lang).toBe("string");
+    expect(typeof tweet.conversation_id).toBe("string");
+
+    const metrics = tweet.public_metrics as Record<string, number>;
+    expect(typeof metrics.retweet_count).toBe("number");
+    expect(typeof metrics.like_count).toBe("number");
+    expect(typeof metrics.impression_count).toBe("number");
+  });
+
+  it("fixture includes author expansion with public_metrics", () => {
+    expect(fixture.includes.users.length).toBeGreaterThan(0);
+    const author = fixture.includes.users[0];
+    expect(author.username).toBe("JohannesHoppe");
+
+    const userMetrics = author.public_metrics as Record<string, number>;
+    expect(typeof userMetrics.followers_count).toBe("number");
+    expect(typeof userMetrics.following_count).toBe("number");
+  });
+
+  it("compactResponse produces CompactTweet array with author_followers", () => {
+    const compacted = compactResponse(fixture) as {
+      data: CompactTweet[];
+      meta: Record<string, unknown>;
+    };
+
+    expect(compacted.data.length).toBe(5);
+
+    const tweet = compacted.data[0];
+    expect(tweet.author).toBe("@JohannesHoppe");
+    expect(tweet.author_followers).toBe(3159);
+    expect(tweet.author_ratio).toBeGreaterThan(1);
+    expect(typeof tweet.likes).toBe("number");
+    expect(typeof tweet.retweets).toBe("number");
+    expect(typeof tweet.created_at).toBe("string");
+
+    // All search results are from same user (query: from:JohannesHoppe)
+    for (const t of compacted.data) {
+      expect(t.author).toBe("@JohannesHoppe");
+    }
+  });
+
+  it("search meta has result_count but no next_token (small result set)", () => {
+    const compacted = compactResponse(fixture) as {
+      meta: Record<string, unknown>;
+    };
+    expect(compacted.meta.result_count).toBe(5);
+  });
+});
+
+describe("frozen fixture: get-followers", () => {
+  const fixture = loadFixture("get-followers.json") as {
+    data: Array<Record<string, unknown>>;
+    meta: Record<string, unknown>;
+  };
+
+  it("fixture has expected raw X API follower fields", () => {
+    expect(fixture.data.length).toBe(5);
+
+    const user = fixture.data[0];
+    expect(typeof user.id).toBe("string");
+    expect(typeof user.username).toBe("string");
+    expect(typeof user.name).toBe("string");
+    expect(typeof user.created_at).toBe("string");
+    expect(typeof user.verified).toBe("boolean");
+
+    const metrics = user.public_metrics as Record<string, number>;
+    expect(typeof metrics.followers_count).toBe("number");
+    expect(typeof metrics.following_count).toBe("number");
+    expect(typeof metrics.tweet_count).toBe("number");
+  });
+
+  it("fixture has pagination meta", () => {
+    expect(fixture.meta.result_count).toBe(5);
+    expect(typeof fixture.meta.next_token).toBe("string");
+  });
+
+  it("compactResponse produces CompactUser array", () => {
+    const compacted = compactResponse(fixture) as {
+      data: CompactUser[];
+      meta: Record<string, unknown>;
+    };
+
+    expect(Array.isArray(compacted.data)).toBe(true);
+    expect(compacted.data.length).toBe(5);
+
+    // First follower
+    const user = compacted.data[0];
+    expect(user.username).toBe("Mark3e8");
+    expect(user.followers).toBe(27);
+    expect(user.following).toBe(549);
+    expect(typeof user.bio).toBe("string");
+
+    // Second follower — has a bio
+    const user2 = compacted.data[1];
+    expect(user2.username).toBe("brampeirs");
+    expect(user2.bio).toContain("Angular");
+  });
+});
+
+// ============================================================
+// Full pipeline: real API → compact → TOON → parseable output
+// ============================================================
+
+describe("full pipeline: real fixture → compact → TOON", () => {
+  it("timeline fixture produces valid TOON with author_followers", () => {
+    const fixture = loadFixture("get-timeline.json");
+    const compacted = compactResponse(fixture);
+    const toon = formatResult(compacted, "299/300 (900s)", "0/8 replies", false, true);
+
+    // TOON output is NOT valid JSON
+    expect(() => JSON.parse(toon)).toThrow();
+
+    // Should contain tabular header with author_followers field
+    expect(toon).toContain("author_followers");
+    expect(toon).toContain("author_ratio");
+    expect(toon).toContain("@JohannesHoppe");
+    expect(toon).toContain("rate_limit");
+    expect(toon).toContain("budget");
+  });
+
+  it("mentions fixture produces valid TOON with multiple authors", () => {
+    const fixture = loadFixture("get-mentions.json");
+    const compacted = compactResponse(fixture);
+    const toon = formatResult(compacted, "14/15 (900s)", "3/8 replies", false, true);
+
+    expect(toon).toContain("@ScalerSohom");
+    expect(toon).toContain("@angular");
+    expect(toon).toContain("@panditamey1");
+    expect(toon).toContain("rate_limit");
+  });
+
+  it("followers fixture produces valid TOON with user fields", () => {
+    const fixture = loadFixture("get-followers.json");
+    const compacted = compactResponse(fixture);
+    const toon = formatResult(compacted, "14/15 (900s)", undefined, false, true);
+
+    expect(toon).toContain("Mark3e8");
+    expect(toon).toContain("brampeirs");
+    expect(toon).toContain("followers");
+    expect(toon).toContain("following");
+  });
+
+  it("timeline fixture produces valid JSON when toon=false", () => {
+    const fixture = loadFixture("get-timeline.json");
+    const compacted = compactResponse(fixture);
+    const json = formatResult(compacted, "299/300 (900s)", "0/8 replies", false, false);
+
+    // Should be valid JSON
+    const parsed = JSON.parse(json);
+    expect(parsed.data).toBeDefined();
+    expect(parsed.rate_limit).toBe("299/300 (900s)");
+    expect(parsed.budget).toBe("0/8 replies");
   });
 });
