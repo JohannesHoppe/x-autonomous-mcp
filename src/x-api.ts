@@ -357,6 +357,97 @@ export class XApiClient {
     return this.handleResponse(response, "getFollowing");
   }
 
+  // --- Follow operations ---
+
+  async followUser(targetUserId: string) {
+    const userId = await this.getAuthenticatedUserId();
+    const response = await this.oauthFetch(`${this.apiBase}/users/${userId}/following`, "POST", {
+      target_user_id: targetUserId,
+    });
+    return this.handleResponse(response, "followUser");
+  }
+
+  async unfollowUser(targetUserId: string) {
+    const userId = await this.getAuthenticatedUserId();
+    const response = await this.oauthFetch(
+      `${this.apiBase}/users/${userId}/following/${targetUserId}`,
+      "DELETE",
+    );
+    return this.handleResponse(response, "unfollowUser");
+  }
+
+  async getNonFollowers(maxPages: number = 5): Promise<{
+    result: { data: Array<{ id: string; username: string; name: string; followers: number; following: number }>; total_following: number; total_followers: number; non_followers_count: number };
+    rateLimit: string;
+  }> {
+    const userId = await this.getAuthenticatedUserId();
+    let lastRateLimit = "";
+
+    // Fetch all following (paginated)
+    const followingIds = new Set<string>();
+    const followingUsers = new Map<string, { id: string; username: string; name: string; followers: number; following: number }>();
+    let nextToken: string | undefined;
+    for (let page = 0; page < maxPages; page++) {
+      const { result, rateLimit } = await this.getFollowing(userId, 1000, nextToken);
+      lastRateLimit = rateLimit;
+      const resp = result as XApiResponse<Array<Record<string, unknown>>>;
+      if (resp.data) {
+        for (const user of resp.data) {
+          const id = user.id as string;
+          const metrics = user.public_metrics as { followers_count?: number; following_count?: number } | undefined;
+          followingIds.add(id);
+          followingUsers.set(id, {
+            id,
+            username: (user.username as string) ?? "",
+            name: (user.name as string) ?? "",
+            followers: metrics?.followers_count ?? 0,
+            following: metrics?.following_count ?? 0,
+          });
+        }
+      }
+      nextToken = resp.meta?.next_token;
+      if (!nextToken) break;
+    }
+
+    // Fetch all followers (paginated)
+    const followerIds = new Set<string>();
+    nextToken = undefined;
+    for (let page = 0; page < maxPages; page++) {
+      const { result, rateLimit } = await this.getFollowers(userId, 1000, nextToken);
+      lastRateLimit = rateLimit;
+      const resp = result as XApiResponse<Array<Record<string, unknown>>>;
+      if (resp.data) {
+        for (const user of resp.data) {
+          followerIds.add(user.id as string);
+        }
+      }
+      nextToken = resp.meta?.next_token;
+      if (!nextToken) break;
+    }
+
+    // Set difference: following but not follower
+    const nonFollowers: Array<{ id: string; username: string; name: string; followers: number; following: number }> = [];
+    for (const id of followingIds) {
+      if (!followerIds.has(id)) {
+        const user = followingUsers.get(id)!;
+        nonFollowers.push(user);
+      }
+    }
+
+    // Sort by follower count ascending (lowest quality first)
+    nonFollowers.sort((a, b) => a.followers - b.followers);
+
+    return {
+      result: {
+        data: nonFollowers,
+        total_following: followingIds.size,
+        total_followers: followerIds.size,
+        non_followers_count: nonFollowers.length,
+      },
+      rateLimit: lastRateLimit,
+    };
+  }
+
   // --- Engagement operations ---
 
   async likeTweet(tweetId: string) {

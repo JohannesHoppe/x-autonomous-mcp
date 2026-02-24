@@ -13,7 +13,7 @@ import { getDefaultState } from "./state.js";
 import type { StateFile } from "./state.js";
 
 function makeConfig(overrides?: Partial<BudgetConfig>): BudgetConfig {
-  return { maxReplies: 8, maxOriginals: 2, maxLikes: 20, maxRetweets: 5, ...overrides };
+  return { maxReplies: 8, maxOriginals: 2, maxLikes: 20, maxRetweets: 5, maxFollows: 10, ...overrides };
 }
 
 function makeState(overrides?: Partial<StateFile>): StateFile {
@@ -30,7 +30,7 @@ describe("loadBudgetConfig", () => {
 
   it("returns defaults when no env vars set", () => {
     const config = loadBudgetConfig();
-    expect(config).toEqual({ maxReplies: 8, maxOriginals: 2, maxLikes: 20, maxRetweets: 5 });
+    expect(config).toEqual({ maxReplies: 8, maxOriginals: 2, maxLikes: 20, maxRetweets: 5, maxFollows: 10 });
   });
 
   it("reads custom values from env", () => {
@@ -40,7 +40,7 @@ describe("loadBudgetConfig", () => {
     process.env.X_MCP_MAX_RETWEETS = "10";
 
     const config = loadBudgetConfig();
-    expect(config).toEqual({ maxReplies: 3, maxOriginals: 0, maxLikes: -1, maxRetweets: 10 });
+    expect(config).toEqual({ maxReplies: 3, maxOriginals: 0, maxLikes: -1, maxRetweets: 10, maxFollows: 10 });
   });
 
   it("falls back to defaults for non-numeric values", () => {
@@ -53,10 +53,10 @@ describe("loadBudgetConfig", () => {
 describe("formatBudgetString", () => {
   it("formats normal counters", () => {
     const state = makeState({
-      budget: { date: "2026-02-23", replies: 3, originals: 0, likes: 5, retweets: 1 },
+      budget: { date: "2026-02-23", replies: 3, originals: 0, likes: 5, retweets: 1, follows: 2 },
     });
     const result = formatBudgetString(state, makeConfig());
-    expect(result).toBe("3/8 replies, 0/2 originals, 5/20 likes, 1/5 retweets");
+    expect(result).toBe("3/8 replies, 0/2 originals, 5/20 likes, 1/5 retweets, 2/10 follows");
   });
 
   it("shows LIMIT REACHED for exhausted counters", () => {

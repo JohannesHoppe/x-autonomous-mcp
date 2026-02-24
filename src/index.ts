@@ -55,6 +55,29 @@ const server = new McpServer({
   version: "0.1.0",
 });
 
+// --- Valid parameter keys per tool (for Levenshtein suggestions) ---
+
+const VALID_KEYS: Record<string, string[]> = {
+  post_tweet: ["text", "poll_options", "poll_duration_minutes", "media_ids"],
+  reply_to_tweet: ["tweet_id", "text", "media_ids"],
+  quote_tweet: ["tweet_id", "text", "media_ids"],
+  delete_tweet: ["tweet_id"],
+  get_tweet: ["tweet_id"],
+  search_tweets: ["query", "max_results", "min_likes", "min_retweets", "sort_order", "since_id", "next_token"],
+  get_user: ["username", "user_id"],
+  get_timeline: ["user", "max_results", "next_token"],
+  get_mentions: ["max_results", "since_id", "next_token"],
+  get_followers: ["user", "max_results", "next_token"],
+  get_following: ["user", "max_results", "next_token"],
+  follow_user: ["user"],
+  unfollow_user: ["user"],
+  get_non_followers: ["max_pages"],
+  like_tweet: ["tweet_id"],
+  retweet: ["tweet_id"],
+  upload_media: ["media_data", "mime_type", "media_category"],
+  get_metrics: ["tweet_id"],
+};
+
 // --- Handler wrapper ---
 // Centralizes: state loading, budget checks, dedup checks, action recording,
 // response formatting (compact + budget string), and error handling.
@@ -75,6 +98,26 @@ function wrapHandler(
 ): (args: Record<string, unknown>) => Promise<ToolResult> {
   return async (args) => {
     try {
+      // Unknown parameter check with Levenshtein suggestions
+      const validKeys = VALID_KEYS[toolName];
+      if (validKeys) {
+        const unknownKeys = Object.keys(args).filter((k) => !validKeys.includes(k));
+        if (unknownKeys.length > 0) {
+          const hints = unknownKeys
+            .map((k) => {
+              const hint = getParameterHint(toolName, k, validKeys);
+              return hint ? `Unknown parameter '${k}': ${hint}` : `Unknown parameter '${k}'.`;
+            })
+            .join("\n");
+          const state = loadState(statePath);
+          const budgetString = formatBudgetString(state, budgetConfig);
+          return {
+            content: [{ type: "text", text: `Error: ${hints}\n\nValid parameters for ${toolName}: ${validKeys.join(", ")}\n\nCurrent budget: ${budgetString}` }],
+            isError: true,
+          };
+        }
+      }
+
       const state = loadState(statePath);
 
       // Budget check (write tools only)
@@ -137,10 +180,6 @@ function wrapHandler(
 // TWEET TOOLS
 // ============================================================
 
-// post_tweet uses .passthrough() instead of .strict() to enable
-// Feature 5: self-describing error hints for common mistakes.
-const POST_TWEET_VALID_KEYS = ["text", "poll_options", "poll_duration_minutes", "media_ids"];
-
 server.registerTool(
   "post_tweet",
   {
@@ -152,33 +191,14 @@ server.registerTool(
       media_ids: z.array(z.string()).optional().describe("Media IDs to attach (from upload_media)"),
     }).passthrough(),
   },
-  async (args) => {
-    // Feature 5: Check for known-bad parameters before processing
-    const unknownKeys = Object.keys(args).filter((k) => !POST_TWEET_VALID_KEYS.includes(k));
-    if (unknownKeys.length > 0) {
-      const hints = unknownKeys
-        .map((k) => {
-          const hint = getParameterHint("post_tweet", k, POST_TWEET_VALID_KEYS);
-          return hint ? `Unknown parameter '${k}': ${hint}` : `Unknown parameter '${k}'.`;
-        })
-        .join("\n");
-      const state = loadState(statePath);
-      const budgetString = formatBudgetString(state, budgetConfig);
-      return {
-        content: [{ type: "text", text: `Error: ${hints}\n\nValid parameters for post_tweet: ${POST_TWEET_VALID_KEYS.join(", ")}\n\nCurrent budget: ${budgetString}` }],
-        isError: true,
-      };
-    }
-
-    return wrapHandler("post_tweet", async (a) => {
-      return client.postTweet({
-        text: a.text as string,
-        poll_options: a.poll_options as string[] | undefined,
-        poll_duration_minutes: a.poll_duration_minutes as number | undefined,
-        media_ids: a.media_ids as string[] | undefined,
-      });
-    })(args);
-  },
+  wrapHandler("post_tweet", async (args) => {
+    return client.postTweet({
+      text: args.text as string,
+      poll_options: args.poll_options as string[] | undefined,
+      poll_duration_minutes: args.poll_duration_minutes as number | undefined,
+      media_ids: args.media_ids as string[] | undefined,
+    });
+  }),
 );
 
 server.registerTool(
@@ -189,7 +209,7 @@ server.registerTool(
       tweet_id: z.string().describe("The tweet ID or URL to reply to"),
       text: z.string().describe("The reply text"),
       media_ids: z.array(z.string()).optional().describe("Media IDs to attach"),
-    }).strict(),
+    }).passthrough(),
   },
   wrapHandler("reply_to_tweet", async (args, resolvedId) => {
     return client.postTweet({
@@ -208,7 +228,7 @@ server.registerTool(
       tweet_id: z.string().describe("The tweet ID or URL to quote"),
       text: z.string().describe("Your commentary text"),
       media_ids: z.array(z.string()).optional().describe("Media IDs to attach"),
-    }).strict(),
+    }).passthrough(),
   },
   wrapHandler("quote_tweet", async (args, resolvedId) => {
     return client.postTweet({
@@ -227,7 +247,7 @@ if (dangerousEnabled) {
       description: "Delete a post on X by its ID. This tool is only available when X_MCP_ENABLE_DANGEROUS=true.",
       inputSchema: z.object({
         tweet_id: z.string().describe("The tweet ID or URL to delete"),
-      }).strict(),
+      }).passthrough(),
     },
     wrapHandler("delete_tweet", async (args) => {
       const id = parseTweetId(args.tweet_id as string);
@@ -242,7 +262,7 @@ server.registerTool(
     description: "Fetch a tweet and its metadata by ID or URL. Returns author info, metrics, and referenced tweets.",
     inputSchema: z.object({
       tweet_id: z.string().describe("The tweet ID or URL to fetch"),
-    }).strict(),
+    }).passthrough(),
   },
   wrapHandler("get_tweet", async (args) => {
     const id = parseTweetId(args.tweet_id as string);
@@ -266,7 +286,7 @@ server.registerTool(
       sort_order: z.enum(["recency", "relevancy"]).optional().describe("Sort order: 'recency' (default) or 'relevancy' (popular first)"),
       since_id: z.string().optional().describe("Only return tweets newer than this tweet ID (for incremental polling)"),
       next_token: z.string().optional().describe("Pagination token from previous response"),
-    }).strict(),
+    }).passthrough(),
   },
   wrapHandler("search_tweets", async (args) => {
     return client.searchTweets(
@@ -294,7 +314,7 @@ server.registerTool(
     inputSchema: z.object({
       username: z.string().optional().describe("Username (without @)"),
       user_id: z.string().optional().describe("Numeric user ID"),
-    }).strict(),
+    }).passthrough(),
   },
   async (args) => {
     if (!args.username && !args.user_id) {
@@ -319,7 +339,7 @@ server.registerTool(
       user: z.string().describe("Username (with or without @) or numeric user ID"),
       max_results: z.number().optional().describe("Number of results (5-100, default 10)"),
       next_token: z.string().optional().describe("Pagination token from previous response"),
-    }).strict(),
+    }).passthrough(),
   },
   wrapHandler("get_timeline", async (args) => {
     const userId = await client.resolveUserId(args.user as string);
@@ -339,7 +359,7 @@ server.registerTool(
       max_results: z.number().optional().describe("Number of results (5-100, default 10)"),
       since_id: z.string().optional().describe("Only return mentions newer than this tweet ID (for incremental polling)"),
       next_token: z.string().optional().describe("Pagination token from previous response"),
-    }).strict(),
+    }).passthrough(),
   },
   wrapHandler("get_mentions", async (args) => {
     return client.getMentions(
@@ -358,7 +378,7 @@ server.registerTool(
       user: z.string().describe("Username (with or without @) or numeric user ID"),
       max_results: z.number().optional().describe("Number of results (1-1000, default 100)"),
       next_token: z.string().optional().describe("Pagination token from previous response"),
-    }).strict(),
+    }).passthrough(),
   },
   wrapHandler("get_followers", async (args) => {
     const userId = await client.resolveUserId(args.user as string);
@@ -378,7 +398,7 @@ server.registerTool(
       user: z.string().describe("Username (with or without @) or numeric user ID"),
       max_results: z.number().optional().describe("Number of results (1-1000, default 100)"),
       next_token: z.string().optional().describe("Pagination token from previous response"),
-    }).strict(),
+    }).passthrough(),
   },
   wrapHandler("get_following", async (args) => {
     const userId = await client.resolveUserId(args.user as string);
@@ -400,7 +420,7 @@ server.registerTool(
     description: "Like a post on X.",
     inputSchema: z.object({
       tweet_id: z.string().describe("The tweet ID or URL to like"),
-    }).strict(),
+    }).passthrough(),
   },
   wrapHandler("like_tweet", async (_args, resolvedId) => {
     return client.likeTweet(resolvedId!);
@@ -413,11 +433,59 @@ server.registerTool(
     description: "Retweet a post on X.",
     inputSchema: z.object({
       tweet_id: z.string().describe("The tweet ID or URL to retweet"),
-    }).strict(),
+    }).passthrough(),
   },
   wrapHandler("retweet", async (_args, resolvedId) => {
     return client.retweet(resolvedId!);
   }, { getTargetTweetId: (args) => parseTweetId(args.tweet_id as string) }),
+);
+
+// ============================================================
+// FOLLOW / UNFOLLOW
+// ============================================================
+
+server.registerTool(
+  "follow_user",
+  {
+    description: "Follow a user on X. Accepts a username or numeric user ID. Budget-limited.",
+    inputSchema: z.object({
+      user: z.string().describe("Username (with or without @) or numeric user ID"),
+    }).passthrough(),
+  },
+  wrapHandler("follow_user", async (args) => {
+    const userId = await client.resolveUserId(args.user as string);
+    return client.followUser(userId);
+  }),
+);
+
+// unfollow_user — gated behind X_MCP_ENABLE_DANGEROUS
+if (dangerousEnabled) {
+  server.registerTool(
+    "unfollow_user",
+    {
+      description: "Unfollow a user on X. Accepts a username or numeric user ID. Only available when X_MCP_ENABLE_DANGEROUS=true.",
+      inputSchema: z.object({
+        user: z.string().describe("Username (with or without @) or numeric user ID"),
+      }).passthrough(),
+    },
+    wrapHandler("unfollow_user", async (args) => {
+      const userId = await client.resolveUserId(args.user as string);
+      return client.unfollowUser(userId);
+    }),
+  );
+}
+
+server.registerTool(
+  "get_non_followers",
+  {
+    description: "Find accounts you follow that don't follow you back. Returns a list sorted by follower count (lowest first = best unfollow candidates). Fetches up to 5 pages of following/followers — covers up to 5000 accounts.",
+    inputSchema: z.object({
+      max_pages: z.number().optional().describe("Max pages to fetch per list (default 5, each page = 1000 users)"),
+    }).passthrough(),
+  },
+  wrapHandler("get_non_followers", async (args) => {
+    return client.getNonFollowers(args.max_pages as number | undefined);
+  }),
 );
 
 // ============================================================
@@ -432,7 +500,7 @@ server.registerTool(
       media_data: z.string().describe("Base64-encoded media file data"),
       mime_type: z.string().describe("MIME type (e.g. 'image/png', 'image/jpeg', 'video/mp4')"),
       media_category: z.string().optional().describe("Category: 'tweet_image', 'tweet_gif', or 'tweet_video' (default: tweet_image)"),
-    }).strict(),
+    }).passthrough(),
   },
   wrapHandler("upload_media", async (args) => {
     const { mediaId, rateLimit } = await client.uploadMedia(
@@ -457,7 +525,7 @@ server.registerTool(
     description: "Get engagement metrics for a specific post (impressions, likes, retweets, replies, quotes, bookmarks). Requires the tweet to be authored by the authenticated user for non-public metrics.",
     inputSchema: z.object({
       tweet_id: z.string().describe("The tweet ID or URL to get metrics for"),
-    }).strict(),
+    }).passthrough(),
   },
   wrapHandler("get_metrics", async (args) => {
     const id = parseTweetId(args.tweet_id as string);

@@ -13,6 +13,7 @@ export interface StateFile {
     originals: number;
     likes: number;
     retweets: number;
+    follows: number;
   };
   last_write_at: string | null; // ISO 8601: "2026-02-23T13:34:36.000Z"
   engaged: {
@@ -38,6 +39,7 @@ export function getDefaultState(): StateFile {
       originals: 0,
       likes: 0,
       retweets: 0,
+      follows: 0,
     },
     last_write_at: null,
     engaged: {
@@ -93,6 +95,7 @@ function validateState(raw: unknown): StateFile {
       originals: dateChanged ? 0 : asNumber(budget.originals, 0),
       likes: dateChanged ? 0 : asNumber(budget.likes, 0),
       retweets: dateChanged ? 0 : asNumber(budget.retweets, 0),
+      follows: dateChanged ? 0 : asNumber(budget.follows, 0),
     },
     last_write_at: typeof obj.last_write_at === "string" ? obj.last_write_at : null,
     engaged: {

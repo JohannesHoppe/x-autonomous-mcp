@@ -2,7 +2,7 @@ import type { StateFile, EngagedEntry } from "./state.js";
 
 // --- Action type classification ---
 
-type ActionType = "reply" | "original" | "like" | "retweet" | null;
+type ActionType = "reply" | "original" | "like" | "retweet" | "follow" | null;
 type DedupType = "replied_to" | "liked" | "retweeted" | "quoted" | null;
 
 const ACTION_MAP: Record<string, ActionType> = {
@@ -11,6 +11,8 @@ const ACTION_MAP: Record<string, ActionType> = {
   quote_tweet: "original",
   like_tweet: "like",
   retweet: "retweet",
+  follow_user: "follow",
+  unfollow_user: null,
   delete_tweet: null,
   get_tweet: null,
   search_tweets: null,
@@ -19,6 +21,7 @@ const ACTION_MAP: Record<string, ActionType> = {
   get_mentions: null,
   get_followers: null,
   get_following: null,
+  get_non_followers: null,
   upload_media: null,
   get_metrics: null,
 };
@@ -37,6 +40,7 @@ export interface BudgetConfig {
   maxOriginals: number;
   maxLikes: number;
   maxRetweets: number;
+  maxFollows: number;
 }
 
 export function loadBudgetConfig(): BudgetConfig {
@@ -45,6 +49,7 @@ export function loadBudgetConfig(): BudgetConfig {
     maxOriginals: parseLimit(process.env.X_MCP_MAX_ORIGINALS, 2),
     maxLikes: parseLimit(process.env.X_MCP_MAX_LIKES, 20),
     maxRetweets: parseLimit(process.env.X_MCP_MAX_RETWEETS, 5),
+    maxFollows: parseLimit(process.env.X_MCP_MAX_FOLLOWS, 10),
   };
 }
 
@@ -63,6 +68,7 @@ export function formatBudgetString(state: StateFile, config: BudgetConfig): stri
   parts.push(formatCounter(state.budget.originals, config.maxOriginals, "originals"));
   parts.push(formatCounter(state.budget.likes, config.maxLikes, "likes"));
   parts.push(formatCounter(state.budget.retweets, config.maxRetweets, "retweets"));
+  parts.push(formatCounter(state.budget.follows, config.maxFollows, "follows"));
 
   let result = parts.join(", ");
 
@@ -131,6 +137,8 @@ function getBudgetInfo(
       return { used: state.budget.likes, max: config.maxLikes, label: "like" };
     case "retweet":
       return { used: state.budget.retweets, max: config.maxRetweets, label: "retweet" };
+    case "follow":
+      return { used: state.budget.follows, max: config.maxFollows, label: "follow" };
     default:
       return { used: 0, max: -1, label: "unknown" };
   }
@@ -142,6 +150,7 @@ function remainingSummary(state: StateFile, config: BudgetConfig): string {
   parts.push(remainingPart(state.budget.originals, config.maxOriginals, "originals"));
   parts.push(remainingPart(state.budget.likes, config.maxLikes, "likes"));
   parts.push(remainingPart(state.budget.retweets, config.maxRetweets, "retweets"));
+  parts.push(remainingPart(state.budget.follows, config.maxFollows, "follows"));
   return parts.join(", ");
 }
 
@@ -191,6 +200,7 @@ export function recordAction(
   else if (action === "original") state.budget.originals++;
   else if (action === "like") state.budget.likes++;
   else if (action === "retweet") state.budget.retweets++;
+  else if (action === "follow") state.budget.follows++;
 
   // Update last_write_at for any write action
   if (action) {
