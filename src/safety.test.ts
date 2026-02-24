@@ -13,7 +13,7 @@ import { getDefaultState } from "./state.js";
 import type { StateFile } from "./state.js";
 
 function makeConfig(overrides?: Partial<BudgetConfig>): BudgetConfig {
-  return { maxReplies: 8, maxOriginals: 2, maxLikes: 20, maxRetweets: 5, maxFollows: 10, ...overrides };
+  return { maxReplies: 8, maxOriginals: 2, maxLikes: 20, maxRetweets: 5, maxFollows: 10, maxUnfollows: 10, maxDeletes: 5, ...overrides };
 }
 
 function makeState(overrides?: Partial<StateFile>): StateFile {
@@ -30,7 +30,7 @@ describe("loadBudgetConfig", () => {
 
   it("returns defaults when no env vars set", () => {
     const config = loadBudgetConfig();
-    expect(config).toEqual({ maxReplies: 8, maxOriginals: 2, maxLikes: 20, maxRetweets: 5, maxFollows: 10 });
+    expect(config).toEqual({ maxReplies: 8, maxOriginals: 2, maxLikes: 20, maxRetweets: 5, maxFollows: 10, maxUnfollows: 10, maxDeletes: 5 });
   });
 
   it("reads custom values from env", () => {
@@ -40,7 +40,7 @@ describe("loadBudgetConfig", () => {
     process.env.X_MCP_MAX_RETWEETS = "10";
 
     const config = loadBudgetConfig();
-    expect(config).toEqual({ maxReplies: 3, maxOriginals: 0, maxLikes: -1, maxRetweets: 10, maxFollows: 10 });
+    expect(config).toEqual({ maxReplies: 3, maxOriginals: 0, maxLikes: -1, maxRetweets: 10, maxFollows: 10, maxUnfollows: 10, maxDeletes: 5 });
   });
 
   it("falls back to defaults for non-numeric values", () => {
@@ -53,10 +53,10 @@ describe("loadBudgetConfig", () => {
 describe("formatBudgetString", () => {
   it("formats normal counters", () => {
     const state = makeState({
-      budget: { date: "2026-02-23", replies: 3, originals: 0, likes: 5, retweets: 1, follows: 2 },
+      budget: { date: "2026-02-23", replies: 3, originals: 0, likes: 5, retweets: 1, follows: 2, unfollows: 0, deletes: 0 },
     });
     const result = formatBudgetString(state, makeConfig());
-    expect(result).toBe("3/8 replies used, 0/2 originals used, 5/20 likes used, 1/5 retweets used, 2/10 follows used");
+    expect(result).toBe("3/8 replies used, 0/2 originals used, 5/20 likes used, 1/5 retweets used, 2/10 follows used, 0/10 unfollows used, 0/5 deletes used");
   });
 
   it("shows LIMIT REACHED for exhausted counters", () => {
@@ -152,7 +152,15 @@ describe("checkBudget", () => {
     expect(result).toContain("limit reached");
   });
 
-  it("returns null for delete_tweet (no budget)", () => {
+  it("returns error for delete_tweet when at limit", () => {
+    const state = makeState({
+      budget: { date: "2026-02-23", replies: 0, originals: 0, likes: 0, retweets: 0, follows: 0, unfollows: 0, deletes: 5 },
+    });
+    const result = checkBudget("delete_tweet", state, makeConfig());
+    expect(result).toContain("limit reached");
+  });
+
+  it("returns null for delete_tweet under limit", () => {
     expect(checkBudget("delete_tweet", makeState(), makeConfig())).toBeNull();
   });
 
@@ -171,7 +179,15 @@ describe("checkBudget", () => {
     expect(checkBudget("follow_user", state, makeConfig())).toBeNull();
   });
 
-  it("returns null for unfollow_user (no budget)", () => {
+  it("returns error for unfollow_user when at limit", () => {
+    const state = makeState({
+      budget: { date: "2026-02-23", replies: 0, originals: 0, likes: 0, retweets: 0, follows: 0, unfollows: 10, deletes: 0 },
+    });
+    const result = checkBudget("unfollow_user", state, makeConfig());
+    expect(result).toContain("limit reached");
+  });
+
+  it("returns null for unfollow_user under limit", () => {
     expect(checkBudget("unfollow_user", makeState(), makeConfig())).toBeNull();
   });
 
@@ -397,12 +413,12 @@ describe("isWriteTool", () => {
     expect(isWriteTool("get_metrics")).toBe(false);
   });
 
-  it("returns false for delete_tweet (no budget action)", () => {
-    expect(isWriteTool("delete_tweet")).toBe(false);
+  it("returns true for delete_tweet (budget-limited)", () => {
+    expect(isWriteTool("delete_tweet")).toBe(true);
   });
 
-  it("returns false for unfollow_user (no budget action)", () => {
-    expect(isWriteTool("unfollow_user")).toBe(false);
+  it("returns true for unfollow_user (budget-limited)", () => {
+    expect(isWriteTool("unfollow_user")).toBe(true);
   });
 
   it("returns false for get_non_followers (read-only)", () => {

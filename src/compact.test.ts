@@ -165,6 +165,7 @@ describe("compactUser", () => {
       following: 50,
       tweets: 500,
       bio: "I test things",
+      pinned_tweet_id: null,
     });
   });
 

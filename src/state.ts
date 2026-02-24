@@ -6,6 +6,19 @@ export interface EngagedEntry {
   at: string; // ISO 8601: "2026-02-23T13:34:36.000Z"
 }
 
+export interface Workflow {
+  id: string;                      // "fc:username" or auto-generated
+  type: string;                    // "follow_cycle", "reply_track"
+  current_step: string;            // where we are in the workflow
+  target_user_id: string;
+  target_username: string;
+  created_at: string;              // ISO 8601
+  check_after: string | null;      // ISO date — skip until this date
+  context: Record<string, string>; // accumulated IDs: pinned_tweet_id, reply_tweet_id, etc.
+  actions_done: string[];          // log: ["followed", "liked_pinned", "replied"]
+  outcome: string | null;          // null = active, "followed_back", "cleaned_up", etc.
+}
+
 export interface StateFile {
   budget: {
     date: string; // ISO 8601 date: "2026-02-23"
@@ -14,6 +27,8 @@ export interface StateFile {
     likes: number;
     retweets: number;
     follows: number;
+    unfollows: number;
+    deletes: number;
   };
   last_write_at: string | null; // ISO 8601: "2026-02-23T13:34:36.000Z"
   engaged: {
@@ -21,11 +36,24 @@ export interface StateFile {
     liked: EngagedEntry[];
     retweeted: EngagedEntry[];
     quoted: EngagedEntry[];
+    followed: EngagedEntry[]; // tweet_id holds user_id for follows
   };
+  workflows: Workflow[];
 }
 
 // Entries older than 90 days are pruned on load
 const DEDUP_MAX_AGE_MS = 90 * 24 * 60 * 60 * 1000;
+
+// Completed workflows older than 30 days are pruned on load
+const WORKFLOW_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+
+// Max active workflows (env-configurable)
+export function getMaxWorkflows(): number {
+  const v = process.env.X_MCP_MAX_WORKFLOWS;
+  if (v === undefined || v === "") return 200;
+  const n = parseInt(v, 10);
+  return isNaN(n) ? 200 : n;
+}
 
 export function todayString(): string {
   return new Date().toISOString().slice(0, 10);
@@ -40,6 +68,8 @@ export function getDefaultState(): StateFile {
       likes: 0,
       retweets: 0,
       follows: 0,
+      unfollows: 0,
+      deletes: 0,
     },
     last_write_at: null,
     engaged: {
@@ -47,7 +77,9 @@ export function getDefaultState(): StateFile {
       liked: [],
       retweeted: [],
       quoted: [],
+      followed: [],
     },
+    workflows: [],
   };
 }
 
@@ -65,6 +97,47 @@ function asEngagedArray(value: unknown): EngagedEntry[] {
 function pruneEngaged(entries: EngagedEntry[]): EngagedEntry[] {
   const cutoff = Date.now() - DEDUP_MAX_AGE_MS;
   return entries.filter((e) => new Date(e.at).getTime() > cutoff);
+}
+
+function isWorkflow(obj: unknown): obj is Workflow {
+  if (!obj || typeof obj !== "object") return false;
+  const w = obj as Record<string, unknown>;
+  return (
+    typeof w.id === "string" &&
+    typeof w.type === "string" &&
+    typeof w.current_step === "string" &&
+    typeof w.target_user_id === "string" &&
+    typeof w.target_username === "string" &&
+    typeof w.created_at === "string"
+  );
+}
+
+function asWorkflowArray(value: unknown): Workflow[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter(isWorkflow).map((w) => ({
+    id: w.id,
+    type: w.type,
+    current_step: w.current_step,
+    target_user_id: w.target_user_id,
+    target_username: w.target_username,
+    created_at: w.created_at,
+    check_after: typeof w.check_after === "string" ? w.check_after : null,
+    context: (w.context && typeof w.context === "object" && !Array.isArray(w.context))
+      ? w.context as Record<string, string>
+      : {},
+    actions_done: Array.isArray(w.actions_done) ? w.actions_done.filter((s: unknown) => typeof s === "string") : [],
+    outcome: typeof w.outcome === "string" ? w.outcome : null,
+  }));
+}
+
+function pruneWorkflows(workflows: Workflow[]): Workflow[] {
+  const cutoff = Date.now() - WORKFLOW_MAX_AGE_MS;
+  return workflows.filter((w) => {
+    // Keep all active workflows (no outcome)
+    if (!w.outcome) return true;
+    // Prune completed workflows older than 30 days
+    return new Date(w.created_at).getTime() > cutoff;
+  });
 }
 
 /**
@@ -88,6 +161,8 @@ function validateState(raw: unknown): StateFile {
   // Reset counters if date changed
   const dateChanged = budgetDate !== today;
 
+  const workflows = pruneWorkflows(asWorkflowArray(obj.workflows));
+
   return {
     budget: {
       date: today,
@@ -96,6 +171,8 @@ function validateState(raw: unknown): StateFile {
       likes: dateChanged ? 0 : asNumber(budget.likes, 0),
       retweets: dateChanged ? 0 : asNumber(budget.retweets, 0),
       follows: dateChanged ? 0 : asNumber(budget.follows, 0),
+      unfollows: dateChanged ? 0 : asNumber(budget.unfollows, 0),
+      deletes: dateChanged ? 0 : asNumber(budget.deletes, 0),
     },
     last_write_at: typeof obj.last_write_at === "string" ? obj.last_write_at : null,
     engaged: {
@@ -103,7 +180,9 @@ function validateState(raw: unknown): StateFile {
       liked: pruneEngaged(asEngagedArray(engaged.liked)),
       retweeted: pruneEngaged(asEngagedArray(engaged.retweeted)),
       quoted: pruneEngaged(asEngagedArray(engaged.quoted)),
+      followed: pruneEngaged(asEngagedArray(engaged.followed)),
     },
+    workflows,
   };
 }
 

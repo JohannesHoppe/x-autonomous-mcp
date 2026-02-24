@@ -1,6 +1,6 @@
 # x-autonomous-mcp
 
-An MCP (Model Context Protocol) server that gives AI agents full access to the X (Twitter) API — with built-in safety rails for autonomous operation. Post tweets, search, read timelines, like, retweet, upload media, all through natural language. Includes daily budget limits, engagement deduplication, compact TOON-encoded responses, and self-describing errors.
+An MCP (Model Context Protocol) server that gives AI agents full access to the X (Twitter) API — with built-in safety rails for autonomous operation. Post tweets, search, read timelines, like, retweet, upload media, all through natural language. Includes daily budget limits, engagement deduplication, compact TOON-encoded responses, self-describing errors, and a workflow system where the MCP orchestrates multi-step growth strategies.
 
 Works with **Claude Code**, **Claude Desktop**, **OpenAI Codex**, **OpenClaw (ClawdBot)**, **Cursor**, **Windsurf**, **Cline**, and any other MCP-compatible client.
 
@@ -20,6 +20,8 @@ X_MCP_MAX_ORIGINALS=2    # Max standalone posts per day
 X_MCP_MAX_LIKES=20       # Max likes per day
 X_MCP_MAX_RETWEETS=5     # Max retweets per day
 X_MCP_MAX_FOLLOWS=10     # Max follows per day
+X_MCP_MAX_UNFOLLOWS=10   # Max unfollows per day
+X_MCP_MAX_DELETES=5      # Max tweet deletions per day
 ```
 
 Set to `0` to disable an action entirely. Set to `-1` for unlimited.
@@ -72,12 +74,21 @@ Unknown parameter 'poll_option': Did you mean 'poll_options'?
 Valid parameters for post_tweet: text, poll_options, poll_duration_minutes, media_ids
 ```
 
-### Destructive tool gating (default: ON = safe)
+### Budget-gated destructive tools
 
-Destructive operations like `delete_tweet` and `unfollow_user` are **completely hidden** from the LLM unless explicitly opted in. The tools don't show up in the tool list at all — the LLM can't even attempt to call them.
+`delete_tweet` and `unfollow_user` are always visible but budget-limited. Set to `0` to fully disable:
 
 ```
-X_MCP_ENABLE_DANGEROUS=true   # Opt in to expose delete_tweet, unfollow_user.
+X_MCP_MAX_UNFOLLOWS=10   # Default 10/day. Set to 0 to block all unfollows.
+X_MCP_MAX_DELETES=5      # Default 5/day. Set to 0 to block all deletions.
+```
+
+### Protected accounts
+
+Comma-separated usernames that **cannot** be unfollowed — checked by `unfollow_user`, `cleanup_non_followers`, and workflow cleanup:
+
+```
+X_MCP_PROTECTED_ACCOUNTS=friend1,friend2,@mentor
 ```
 
 ### Unknown parameter detection
@@ -140,9 +151,11 @@ get_timeline user="43859239"
 | **Read** | `get_tweet`, `search_tweets`, `get_timeline`, `get_mentions` | "Show me @JohannesHoppe's latest posts" / "Search for tweets about MCP" |
 | **Users** | `get_user`, `get_followers`, `get_following`, `get_non_followers` | "Look up @openai" / "Who doesn't follow me back?" |
 | **Engage** | `like_tweet`, `retweet`, `follow_user` | "Like that tweet" / "Follow @openai" |
+| **Undo** | `unlike_tweet`, `unretweet`, `unfollow_user`, `delete_tweet` | "Unlike that tweet" / "Unfollow @spambot" |
+| **Lists** | `get_list_members`, `get_list_tweets`, `get_followed_lists` | "Show me members of this list" / "What lists do I follow?" |
 | **Media** | `upload_media` | "Upload this image and post it with the caption..." |
 | **Analytics** | `get_metrics` | "How many impressions did my last post get?" |
-| **Dangerous** | `delete_tweet`, `unfollow_user` | Hidden by default. Enable with `X_MCP_ENABLE_DANGEROUS=true`. |
+| **Workflows** | `get_next_task`, `submit_task`, `start_workflow`, `get_workflow_status`, `cleanup_non_followers` | "What's my next task?" / "Start a follow cycle for @interesting_user" |
 
 Accepts tweet URLs or IDs interchangeably -- paste `https://x.com/user/status/123` or just `123`.
 Accepts usernames with or without `@`, or numeric user IDs -- `@JohannesHoppe`, `JohannesHoppe`, or `43859239`.
@@ -304,6 +317,40 @@ Current x_budget: 0/8 replies used, 0/2 originals used, 0/20 likes used, 0/5 ret
 
 ---
 
+## Workflow System
+
+The MCP includes a hardcoded workflow engine that orchestrates multi-step growth strategies. The MCP is the authority — it auto-executes all mechanical steps and only asks the LLM when it needs creative input (writing replies, picking targets).
+
+### How It Works
+
+```
+LLM: get_next_task()
+MCP: [auto-executes all pending steps — follow-back checks, cleanups, audits]
+MCP: "I need you to write a reply to this tweet: [context]. Return it via submit_task."
+LLM: submit_task(workflow_id, { reply_text: "..." })
+MCP: [posts reply, records ID, sets 7-day timer — all automatic]
+MCP: "Done. Next: call get_next_task."
+```
+
+If the LLM wanders off, nothing breaks. Workflows are persistent. Budgets prevent damage. Next `get_next_task` call resumes exactly where things left off.
+
+### Available Workflow Types
+
+- **follow_cycle**: Follow → like pinned → reply → wait 7d → check follow-back → cleanup if not followed back
+- **reply_track**: Track a reply for performance audit after 48h → auto-delete if zero engagement
+
+### Workflow Tools
+
+| Tool | Description |
+|------|-------------|
+| `get_next_task` | Auto-processes all pending work, returns next LLM assignment |
+| `submit_task` | Submit LLM response (e.g. reply text), auto-continues workflow |
+| `start_workflow` | Begin a new follow_cycle or reply_track |
+| `get_workflow_status` | Show all workflows with steps, dates, outcomes |
+| `cleanup_non_followers` | Batch-unfollow non-followers (respects budget + protected accounts) |
+
+---
+
 ## Setup
 
 ### 1. Clone and build
@@ -380,6 +427,8 @@ X_MCP_MAX_ORIGINALS=2
 X_MCP_MAX_LIKES=20
 X_MCP_MAX_RETWEETS=5
 X_MCP_MAX_FOLLOWS=10
+X_MCP_MAX_UNFOLLOWS=10
+X_MCP_MAX_DELETES=5
 
 # TOON encoding (default: true) — set to "false" for JSON
 X_MCP_TOON=true
@@ -390,8 +439,11 @@ X_MCP_COMPACT=true
 # Engagement deduplication (default: true)
 X_MCP_DEDUP=true
 
-# Destructive tools: delete_tweet, unfollow_user (default: disabled, tools are hidden)
-# X_MCP_ENABLE_DANGEROUS=true
+# Protected accounts (cannot be unfollowed)
+# X_MCP_PROTECTED_ACCOUNTS=friend1,friend2,@mentor
+
+# Max active workflows (default: 200)
+# X_MCP_MAX_WORKFLOWS=200
 ```
 
 ---

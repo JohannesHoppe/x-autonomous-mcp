@@ -17,7 +17,16 @@ import {
   recordAction,
   getParameterHint,
   isWriteTool,
+  loadProtectedAccounts,
+  isProtectedAccount,
 } from "./safety.js";
+import {
+  processWorkflows,
+  submitTaskResponse,
+  createWorkflow,
+  getWorkflowStatus,
+  cleanupNonFollowers,
+} from "./workflow.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, "..", ".env") });
@@ -45,8 +54,8 @@ const statePath = process.env.X_MCP_STATE_FILE
 const budgetConfig = loadBudgetConfig();
 const compactMode = process.env.X_MCP_COMPACT !== "false"; // default true
 const dedupEnabled = process.env.X_MCP_DEDUP !== "false"; // default true
-const dangerousEnabled = process.env.X_MCP_ENABLE_DANGEROUS === "true"; // default false
 const toonEnabled = process.env.X_MCP_TOON !== "false"; // default true
+const protectedAccounts = loadProtectedAccounts();
 
 // --- MCP server ---
 
@@ -74,8 +83,18 @@ const VALID_KEYS: Record<string, string[]> = {
   get_non_followers: ["max_pages"],
   like_tweet: ["tweet_id"],
   retweet: ["tweet_id"],
+  unlike_tweet: ["tweet_id"],
+  unretweet: ["tweet_id"],
   upload_media: ["media_data", "mime_type", "media_category"],
   get_metrics: ["tweet_id"],
+  get_list_members: ["list_id", "max_results", "next_token"],
+  get_list_tweets: ["list_id", "max_results", "next_token"],
+  get_followed_lists: ["max_results", "next_token"],
+  get_next_task: [],
+  submit_task: ["workflow_id", "response"],
+  start_workflow: ["type", "target"],
+  get_workflow_status: ["type", "include_completed"],
+  cleanup_non_followers: ["max_unfollow", "max_pages"],
 };
 
 // --- Handler wrapper ---
@@ -83,7 +102,7 @@ const VALID_KEYS: Record<string, string[]> = {
 // response formatting (compact + budget string), and error handling.
 
 interface WrapOptions {
-  getTargetTweetId?: (args: Record<string, unknown>) => string;
+  getTargetTweetId?: (args: Record<string, unknown>) => string | Promise<string>;
 }
 
 type ToolResult = {
@@ -131,7 +150,7 @@ function wrapHandler(
       }
 
       // Dedup check (engagement tools only) — also resolves tweet ID once
-      const targetId = opts?.getTargetTweetId?.(args);
+      const targetId = opts?.getTargetTweetId ? await opts.getTargetTweetId(args) : undefined;
       if (dedupEnabled && targetId) {
         const dedupError = checkDedup(toolName, targetId, state);
         if (dedupError) {
@@ -239,22 +258,19 @@ server.registerTool(
   }, { getTargetTweetId: (args) => parseTweetId(args.tweet_id as string) }),
 );
 
-// Destructive tools — hidden unless X_MCP_ENABLE_DANGEROUS=true
-if (dangerousEnabled) {
-  server.registerTool(
-    "delete_tweet",
-    {
-      description: "Delete a post on X by its ID. This tool is only available when X_MCP_ENABLE_DANGEROUS=true.",
-      inputSchema: z.object({
-        tweet_id: z.string().describe("The tweet ID or URL to delete"),
-      }).passthrough(),
-    },
-    wrapHandler("delete_tweet", async (args) => {
-      const id = parseTweetId(args.tweet_id as string);
-      return client.deleteTweet(id);
-    }),
-  );
-}
+server.registerTool(
+  "delete_tweet",
+  {
+    description: "Delete a post on X by its ID. Budget-limited (default 5/day). Set X_MCP_MAX_DELETES=0 to disable.",
+    inputSchema: z.object({
+      tweet_id: z.string().describe("The tweet ID or URL to delete"),
+    }).passthrough(),
+  },
+  wrapHandler("delete_tweet", async (args) => {
+    const id = parseTweetId(args.tweet_id as string);
+    return client.deleteTweet(id);
+  }),
+);
 
 server.registerTool(
   "get_tweet",
@@ -447,7 +463,7 @@ server.registerTool(
 server.registerTool(
   "follow_user",
   {
-    description: "Follow a user on X. Accepts a username or numeric user ID. Budget-limited.",
+    description: "Follow a user on X. Accepts a username or numeric user ID. Budget-limited. Dedup-tracked — won't follow the same user twice.",
     inputSchema: z.object({
       user: z.string().describe("Username (with or without @) or numeric user ID"),
     }).passthrough(),
@@ -455,25 +471,44 @@ server.registerTool(
   wrapHandler("follow_user", async (args) => {
     const userId = await client.resolveUserId(args.user as string);
     return client.followUser(userId);
-  }),
+  }, { getTargetTweetId: async (args) => {
+    // Reuse dedup system — "tweet_id" slot holds user_id for follow dedup
+    return client.resolveUserId(args.user as string);
+  } }),
 );
 
-// unfollow_user — gated behind X_MCP_ENABLE_DANGEROUS
-if (dangerousEnabled) {
-  server.registerTool(
-    "unfollow_user",
-    {
-      description: "Unfollow a user on X. Accepts a username or numeric user ID. Only available when X_MCP_ENABLE_DANGEROUS=true.",
-      inputSchema: z.object({
-        user: z.string().describe("Username (with or without @) or numeric user ID"),
-      }).passthrough(),
-    },
-    wrapHandler("unfollow_user", async (args) => {
-      const userId = await client.resolveUserId(args.user as string);
-      return client.unfollowUser(userId);
-    }),
-  );
-}
+server.registerTool(
+  "unfollow_user",
+  {
+    description: "Unfollow a user on X. Accepts a username or numeric user ID. Budget-limited (default 10/day). Protected accounts (X_MCP_PROTECTED_ACCOUNTS) are blocked. Set X_MCP_MAX_UNFOLLOWS=0 to disable.",
+    inputSchema: z.object({
+      user: z.string().describe("Username (with or without @) or numeric user ID"),
+    }).passthrough(),
+  },
+  async (args) => {
+    try {
+      const userRef = args.user as string;
+      // Check protected accounts before anything
+      if (isProtectedAccount(userRef, protectedAccounts)) {
+        const state = loadState(statePath);
+        const budgetString = formatBudgetString(state, budgetConfig);
+        return {
+          content: [{ type: "text" as const, text: `Error: @${userRef.replace(/^@/, "")} is a protected account. Cannot unfollow.\n\nCurrent x_budget: ${budgetString}` }],
+          isError: true,
+        };
+      }
+      return wrapHandler("unfollow_user", async (a) => {
+        const userId = await client.resolveUserId(a.user as string);
+        return client.unfollowUser(userId);
+      })(args as Record<string, unknown>);
+    } catch (e: unknown) {
+      return {
+        content: [{ type: "text" as const, text: `Error: ${errorMessage(e)}` }],
+        isError: true,
+      };
+    }
+  },
+);
 
 server.registerTool(
   "get_non_followers",
@@ -531,6 +566,329 @@ server.registerTool(
     const id = parseTweetId(args.tweet_id as string);
     return client.getTweetMetrics(id);
   }),
+);
+
+// ============================================================
+// UNDO TOOLS
+// ============================================================
+
+server.registerTool(
+  "unlike_tweet",
+  {
+    description: "Unlike a previously liked post on X.",
+    inputSchema: z.object({
+      tweet_id: z.string().describe("The tweet ID or URL to unlike"),
+    }).passthrough(),
+  },
+  wrapHandler("unlike_tweet", async (args) => {
+    const id = parseTweetId(args.tweet_id as string);
+    return client.unlikeTweet(id);
+  }),
+);
+
+server.registerTool(
+  "unretweet",
+  {
+    description: "Remove a retweet on X.",
+    inputSchema: z.object({
+      tweet_id: z.string().describe("The tweet ID or URL to unretweet"),
+    }).passthrough(),
+  },
+  wrapHandler("unretweet", async (args) => {
+    const id = parseTweetId(args.tweet_id as string);
+    return client.unretweet(id);
+  }),
+);
+
+// ============================================================
+// LIST TOOLS
+// ============================================================
+
+server.registerTool(
+  "get_list_members",
+  {
+    description: "Get members of a Twitter/X list. Returns user profiles with follower counts.",
+    inputSchema: z.object({
+      list_id: z.string().describe("The list ID"),
+      max_results: z.number().optional().describe("Number of results (1-100, default 100)"),
+      next_token: z.string().optional().describe("Pagination token from previous response"),
+    }).passthrough(),
+  },
+  wrapHandler("get_list_members", async (args) => {
+    return client.getListMembers(
+      args.list_id as string,
+      args.max_results as number | undefined,
+      args.next_token as string | undefined,
+    );
+  }),
+);
+
+server.registerTool(
+  "get_list_tweets",
+  {
+    description: "Get recent tweets from a Twitter/X list. Returns tweets with author info and metrics.",
+    inputSchema: z.object({
+      list_id: z.string().describe("The list ID"),
+      max_results: z.number().optional().describe("Number of results (1-100, default 100)"),
+      next_token: z.string().optional().describe("Pagination token from previous response"),
+    }).passthrough(),
+  },
+  wrapHandler("get_list_tweets", async (args) => {
+    return client.getListTweets(
+      args.list_id as string,
+      args.max_results as number | undefined,
+      args.next_token as string | undefined,
+    );
+  }),
+);
+
+server.registerTool(
+  "get_followed_lists",
+  {
+    description: "Get lists the authenticated user follows.",
+    inputSchema: z.object({
+      max_results: z.number().optional().describe("Number of results (1-100, default 100)"),
+      next_token: z.string().optional().describe("Pagination token from previous response"),
+    }).passthrough(),
+  },
+  wrapHandler("get_followed_lists", async (args) => {
+    return client.getFollowedLists(
+      args.max_results as number | undefined,
+      args.next_token as string | undefined,
+    );
+  }),
+);
+
+// ============================================================
+// WORKFLOW TOOLS
+// ============================================================
+
+server.registerTool(
+  "get_next_task",
+  {
+    description: "MUST be called at the start of every session. The MCP auto-processes all pending workflow steps (follow-backs, cleanups, audits) and returns your next assignment. If nothing is pending, returns status summary.",
+    inputSchema: z.object({}).passthrough(),
+  },
+  async () => {
+    try {
+      const state = loadState(statePath);
+      const result = await processWorkflows(state, client, budgetConfig, protectedAccounts);
+      saveState(statePath, state);
+
+      const budgetString = formatBudgetString(state, budgetConfig);
+      const output: Record<string, unknown> = {};
+
+      if (result.auto_completed.length > 0) {
+        output.auto_completed = result.auto_completed.join("\n");
+      }
+      if (result.next_task) {
+        output.next_task = result.next_task;
+      }
+      output.status = result.status;
+      output.x_budget = budgetString;
+
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(output, null, 2) }],
+      };
+    } catch (e: unknown) {
+      return {
+        content: [{ type: "text" as const, text: `Error: ${errorMessage(e)}` }],
+        isError: true,
+      };
+    }
+  },
+);
+
+server.registerTool(
+  "submit_task",
+  {
+    description: "Submit your response to the MCP's workflow request. After submitting, call get_next_task for your next assignment.",
+    inputSchema: z.object({
+      workflow_id: z.string().describe("The workflow ID from the task assignment"),
+      response: z.record(z.string()).describe("Your response (e.g. { reply_text: '...' })"),
+    }).passthrough(),
+  },
+  async (args) => {
+    try {
+      const state = loadState(statePath);
+      const { error, workflow } = submitTaskResponse(
+        state,
+        args.workflow_id as string,
+        args.response as Record<string, string>,
+      );
+
+      if (error) {
+        const budgetString = formatBudgetString(state, budgetConfig);
+        return {
+          content: [{ type: "text" as const, text: `Error: ${error}\n\nCurrent x_budget: ${budgetString}` }],
+          isError: true,
+        };
+      }
+
+      // Auto-advance after submit
+      const result = await processWorkflows(state, client, budgetConfig, protectedAccounts);
+      saveState(statePath, state);
+
+      const budgetString = formatBudgetString(state, budgetConfig);
+      const output: Record<string, unknown> = {
+        result: `Task submitted for workflow ${args.workflow_id}.`,
+      };
+      if (result.auto_completed.length > 0) {
+        output.auto_completed = result.auto_completed.join("\n");
+      }
+      if (result.next_task) {
+        output.next_task = result.next_task;
+      }
+      output.status = result.status;
+      output.x_budget = budgetString;
+
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(output, null, 2) }],
+      };
+    } catch (e: unknown) {
+      return {
+        content: [{ type: "text" as const, text: `Error: ${errorMessage(e)}` }],
+        isError: true,
+      };
+    }
+  },
+);
+
+server.registerTool(
+  "start_workflow",
+  {
+    description: "Begin a new workflow. For follow_cycle: auto-follows, likes pinned, fetches timeline, then returns reply prompt. For reply_track: creates a tracking entry for a reply already posted.",
+    inputSchema: z.object({
+      type: z.enum(["follow_cycle", "reply_track"]).describe("Workflow type"),
+      target: z.string().describe("Target username (with or without @) or numeric user ID"),
+    }).passthrough(),
+  },
+  async (args) => {
+    try {
+      const state = loadState(statePath);
+      const targetRef = args.target as string;
+      const userId = await client.resolveUserId(targetRef);
+      const username = targetRef.replace(/^@/, "");
+
+      const { error } = createWorkflow(state, args.type as string, userId, username);
+      if (error) {
+        const budgetString = formatBudgetString(state, budgetConfig);
+        return {
+          content: [{ type: "text" as const, text: `Error: ${error}\n\nCurrent x_budget: ${budgetString}` }],
+          isError: true,
+        };
+      }
+
+      // Auto-advance the new workflow
+      const result = await processWorkflows(state, client, budgetConfig, protectedAccounts);
+      saveState(statePath, state);
+
+      const budgetString = formatBudgetString(state, budgetConfig);
+      const output: Record<string, unknown> = {
+        result: `Workflow ${args.type} started for @${username}.`,
+      };
+      if (result.auto_completed.length > 0) {
+        output.auto_completed = result.auto_completed.join("\n");
+      }
+      if (result.next_task) {
+        output.next_task = result.next_task;
+      }
+      output.status = result.status;
+      output.x_budget = budgetString;
+
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(output, null, 2) }],
+      };
+    } catch (e: unknown) {
+      return {
+        content: [{ type: "text" as const, text: `Error: ${errorMessage(e)}` }],
+        isError: true,
+      };
+    }
+  },
+);
+
+server.registerTool(
+  "get_workflow_status",
+  {
+    description: "Show all active workflows with their current step, check-back dates, and outcomes.",
+    inputSchema: z.object({
+      type: z.string().optional().describe("Filter by workflow type (e.g. 'follow_cycle', 'reply_track')"),
+      include_completed: z.boolean().optional().describe("Include completed workflows (default false)"),
+    }).passthrough(),
+  },
+  async (args) => {
+    try {
+      const state = loadState(statePath);
+      const workflows = getWorkflowStatus(
+        state,
+        args.type as string | undefined,
+        (args.include_completed as boolean) ?? false,
+      );
+
+      const budgetString = formatBudgetString(state, budgetConfig);
+      const summary = workflows.map((w) => ({
+        id: w.id,
+        type: w.type,
+        target: `@${w.target_username}`,
+        step: w.current_step,
+        check_after: w.check_after,
+        actions: w.actions_done,
+        outcome: w.outcome,
+      }));
+
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify({ workflows: summary, count: workflows.length, x_budget: budgetString }, null, 2) }],
+      };
+    } catch (e: unknown) {
+      return {
+        content: [{ type: "text" as const, text: `Error: ${errorMessage(e)}` }],
+        isError: true,
+      };
+    }
+  },
+);
+
+server.registerTool(
+  "cleanup_non_followers",
+  {
+    description: "Find non-followers and batch-unfollow them. Protected accounts (X_MCP_PROTECTED_ACCOUNTS) are skipped. Budget-limited.",
+    inputSchema: z.object({
+      max_unfollow: z.number().optional().describe("Maximum accounts to unfollow (default 10)"),
+      max_pages: z.number().optional().describe("Max pages to fetch per list (default 5, each page = 1000 users)"),
+    }).passthrough(),
+  },
+  async (args) => {
+    try {
+      const state = loadState(statePath);
+      const result = await cleanupNonFollowers(
+        client,
+        state,
+        budgetConfig,
+        protectedAccounts,
+        (args.max_unfollow as number) ?? 10,
+        (args.max_pages as number) ?? 5,
+      );
+      saveState(statePath, state);
+
+      const budgetString = formatBudgetString(state, budgetConfig);
+      const output: Record<string, unknown> = {
+        unfollowed: result.unfollowed,
+        skipped: result.skipped,
+        x_budget: budgetString,
+      };
+      if (result.error) output.error = result.error;
+
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(output, null, 2) }],
+      };
+    } catch (e: unknown) {
+      return {
+        content: [{ type: "text" as const, text: `Error: ${errorMessage(e)}` }],
+        isError: true,
+      };
+    }
+  },
 );
 
 // ============================================================

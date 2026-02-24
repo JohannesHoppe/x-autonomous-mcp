@@ -281,7 +281,7 @@ Once connected, you have access to these tools (prefixed with `mcp__x-twitter__`
 - **post_tweet** -- Post text, polls, or media. Parameters: `text` (required), `poll_options`, `poll_duration_minutes`, `media_ids`
 - **reply_to_tweet** -- Reply to a tweet. Parameters: `tweet_id` (ID or URL), `text`, `media_ids`
 - **quote_tweet** -- Quote retweet. Parameters: `tweet_id` (ID or URL), `text`, `media_ids`
-- **delete_tweet** -- Delete a tweet. Parameters: `tweet_id` (ID or URL). **Hidden by default** -- only available when `X_MCP_ENABLE_DANGEROUS=true`.
+- **delete_tweet** -- Delete a tweet. Parameters: `tweet_id` (ID or URL). Budget-limited (default 5/day).
 
 ### Reading
 - **get_tweet** -- Fetch tweet with metadata. Parameters: `tweet_id` (ID or URL)
@@ -298,8 +298,24 @@ Once connected, you have access to these tools (prefixed with `mcp__x-twitter__`
 ### Engagement
 - **like_tweet** -- Like a tweet. Parameters: `tweet_id` (ID or URL)
 - **retweet** -- Retweet. Parameters: `tweet_id` (ID or URL)
-- **follow_user** -- Follow a user. Parameters: `user` (username or numeric ID). Budget-limited (default 10/day).
-- **unfollow_user** -- Unfollow a user. Parameters: `user` (username or numeric ID). **Hidden by default** -- only available when `X_MCP_ENABLE_DANGEROUS=true`.
+- **follow_user** -- Follow a user. Parameters: `user` (username or numeric ID). Budget-limited (default 10/day). Dedup-tracked.
+- **unfollow_user** -- Unfollow a user. Parameters: `user` (username or numeric ID). Budget-limited (default 10/day). Protected accounts blocked.
+
+### Undo
+- **unlike_tweet** -- Unlike a tweet. Parameters: `tweet_id` (ID or URL)
+- **unretweet** -- Remove a retweet. Parameters: `tweet_id` (ID or URL)
+
+### Lists
+- **get_list_members** -- Get members of a list. Parameters: `list_id`, `max_results` (1-100), `next_token`
+- **get_list_tweets** -- Get tweets from a list. Parameters: `list_id`, `max_results` (1-100), `next_token`
+- **get_followed_lists** -- Get lists you follow. Parameters: `max_results` (1-100), `next_token`
+
+### Workflows
+- **get_next_task** -- MUST call at session start. Auto-processes pending work, returns next assignment.
+- **submit_task** -- Submit response to MCP request. Parameters: `workflow_id`, `response`
+- **start_workflow** -- Begin workflow. Parameters: `type` (follow_cycle, reply_track), `target`
+- **get_workflow_status** -- Show workflows. Parameters: `type` (optional filter), `include_completed`
+- **cleanup_non_followers** -- Batch-unfollow non-followers. Parameters: `max_unfollow`, `max_pages`
 
 ### Media
 - **upload_media** -- Upload image/video (base64). Parameters: `media_data`, `mime_type`, `media_category`
@@ -410,6 +426,95 @@ No need to look up the user ID first — the server resolves usernames automatic
 To post with an image:
 1. Call `upload_media` with the base64-encoded image data and MIME type
 2. Use the returned `media_id` in `post_tweet`'s `media_ids` array
+
+---
+
+## Workflow System
+
+IMPORTANT: You MUST call `get_next_task` at the START of every session.
+
+The MCP server runs hardcoded workflows and is the authority on what happens next.
+You are a service provider — the MCP tells you what it needs.
+
+When you call `get_next_task`, the MCP:
+1. Auto-executes ALL pending mechanical steps (follow, like, check follow-back, cleanup, audit)
+2. Returns ONE task that needs YOUR input (write a reply, pick a target, etc.)
+
+Your job:
+1. Call `get_next_task`
+2. Do what the MCP asks (write text, pick targets, make judgments)
+3. Call `submit_task` with your answer
+4. The MCP auto-continues the workflow
+5. Call `get_next_task` again for the next task
+6. Repeat until `get_next_task` says "nothing pending"
+
+Do NOT skip steps. Do NOT improvise your own workflow. The MCP tracks everything.
+If you get distracted, just call `get_next_task` — it picks up where you left off.
+
+### Available Workflow Types
+
+- **follow_cycle**: Follow → like pinned → reply → wait 7d → check follow-back → cleanup
+- **reply_track**: Track a reply for performance audit after 48h → keep or delete
+
+### Workflow Tools
+
+- **get_next_task** — MUST be called at start of every session. Auto-processes all pending work, returns your next assignment.
+- **submit_task** — Submit your response to the MCP's request. Parameters: `workflow_id`, `response` (e.g. `{ reply_text: "..." }`)
+- **start_workflow** — Begin a new workflow. Parameters: `type` (follow_cycle, reply_track), `target` (username or ID)
+- **get_workflow_status** — Show all workflows. Parameters: `type` (optional filter), `include_completed` (default false)
+- **cleanup_non_followers** — Batch-unfollow non-followers. Parameters: `max_unfollow` (default 10), `max_pages` (default 5)
+
+### Undo Tools
+
+- **unlike_tweet** — Unlike a previously liked tweet. Parameters: `tweet_id`
+- **unretweet** — Remove a retweet. Parameters: `tweet_id`
+
+### List Tools
+
+- **get_list_members** — Get members of a list. Parameters: `list_id`, `max_results`, `next_token`
+- **get_list_tweets** — Get tweets from a list. Parameters: `list_id`, `max_results`, `next_token`
+- **get_followed_lists** — Get lists you follow. Parameters: `max_results`, `next_token`
+
+### Example Session
+
+```
+Bot: get_next_task()
+MCP: [auto-processed 2 follow-back checks: 1 followed back, 1 cleaned up]
+MCP: {
+  "auto_completed": "Processed: @alice followed back! / @bob cleaned up (unliked, deleted, unfollowed)",
+  "next_task": {
+    "workflow_id": "fc:charlie",
+    "instruction": "Write a genuine, insightful reply to this tweet. Spark conversation, don't be generic.",
+    "context": { "tweet_id": "123", "tweet_text": "Hot take: MCP servers are the new APIs", "author": "@charlie" }
+  },
+  "x_budget": "2/8 replies used, 1/2 originals used, 5/20 likes used, ..."
+}
+
+Bot: submit_task(workflow_id="fc:charlie", response={ reply_text: "This resonates — we built x-autonomous-mcp and the composability is..." })
+MCP: [posts reply, records ID, sets 7-day check-back — all automatic]
+MCP: { "result": "Task submitted for workflow fc:charlie.", "status": "Reply posted. Check-back scheduled for 2026-03-03." }
+
+Bot: get_next_task()
+MCP: { "next_task": null, "status": "No tasks pending. 5 workflows waiting (earliest: 2026-03-01)." }
+```
+
+### Algorithm Cheat Sheet
+
+```
+Reply with follow-up = +75x | Reply = +13.5x | Retweet = +1x | Like = +0.5x
+External links = -50% to -90% reach → put links in self-reply
+Following/follower ratio > 0.6 = hard algorithmic penalty
+First 30 minutes = algorithm's test window
+Self-quote 4-6h later restarts engagement clock
+Mass unfollow (>100/day) = 3-month shadowban
+```
+
+### Strategy Patterns (use primitive tools)
+
+- **Self-Quote Boost:** `post_tweet` → 60s → `reply_to_tweet` (link) → 4-6h → `quote_tweet`
+- **Pre-Engagement Warm-Up:** Like 5-10 + reply to 3-5 niche posts → then post your content
+- **Non-Follower Cleanup:** `cleanup_non_followers` periodically, keep ratio < 0.6
+- **List Targeting:** `get_followed_lists` → `get_list_members` → `start_workflow` for best candidates
 
 ---
 

@@ -2,8 +2,8 @@ import type { StateFile, EngagedEntry } from "./state.js";
 
 // --- Action type classification ---
 
-type ActionType = "reply" | "original" | "like" | "retweet" | "follow" | null;
-type DedupType = "replied_to" | "liked" | "retweeted" | "quoted" | null;
+type ActionType = "reply" | "original" | "like" | "retweet" | "follow" | "unfollow" | "delete" | null;
+type DedupType = "replied_to" | "liked" | "retweeted" | "quoted" | "followed" | null;
 
 const ACTION_MAP: Record<string, ActionType> = {
   post_tweet: "original",
@@ -12,8 +12,8 @@ const ACTION_MAP: Record<string, ActionType> = {
   like_tweet: "like",
   retweet: "retweet",
   follow_user: "follow",
-  unfollow_user: null,
-  delete_tweet: null,
+  unfollow_user: "unfollow",
+  delete_tweet: "delete",
   get_tweet: null,
   search_tweets: null,
   get_user: null,
@@ -24,6 +24,16 @@ const ACTION_MAP: Record<string, ActionType> = {
   get_non_followers: null,
   upload_media: null,
   get_metrics: null,
+  unlike_tweet: null,
+  unretweet: null,
+  get_list_members: null,
+  get_list_tweets: null,
+  get_followed_lists: null,
+  get_next_task: null,
+  submit_task: null,
+  start_workflow: null,
+  get_workflow_status: null,
+  cleanup_non_followers: null,
 };
 
 const DEDUP_MAP: Record<string, DedupType> = {
@@ -31,6 +41,7 @@ const DEDUP_MAP: Record<string, DedupType> = {
   like_tweet: "liked",
   retweet: "retweeted",
   quote_tweet: "quoted",
+  follow_user: "followed",
 };
 
 // --- Budget configuration ---
@@ -41,6 +52,8 @@ export interface BudgetConfig {
   maxLikes: number;
   maxRetweets: number;
   maxFollows: number;
+  maxUnfollows: number;
+  maxDeletes: number;
 }
 
 export function loadBudgetConfig(): BudgetConfig {
@@ -50,6 +63,8 @@ export function loadBudgetConfig(): BudgetConfig {
     maxLikes: parseLimit(process.env.X_MCP_MAX_LIKES, 20),
     maxRetweets: parseLimit(process.env.X_MCP_MAX_RETWEETS, 5),
     maxFollows: parseLimit(process.env.X_MCP_MAX_FOLLOWS, 10),
+    maxUnfollows: parseLimit(process.env.X_MCP_MAX_UNFOLLOWS, 10),
+    maxDeletes: parseLimit(process.env.X_MCP_MAX_DELETES, 5),
   };
 }
 
@@ -69,6 +84,8 @@ export function formatBudgetString(state: StateFile, config: BudgetConfig): stri
   parts.push(formatCounter(state.budget.likes, config.maxLikes, "likes"));
   parts.push(formatCounter(state.budget.retweets, config.maxRetweets, "retweets"));
   parts.push(formatCounter(state.budget.follows, config.maxFollows, "follows"));
+  parts.push(formatCounter(state.budget.unfollows, config.maxUnfollows, "unfollows"));
+  parts.push(formatCounter(state.budget.deletes, config.maxDeletes, "deletes"));
 
   let result = parts.join(", ");
 
@@ -139,6 +156,10 @@ function getBudgetInfo(
       return { used: state.budget.retweets, max: config.maxRetweets, label: "retweet" };
     case "follow":
       return { used: state.budget.follows, max: config.maxFollows, label: "follow" };
+    case "unfollow":
+      return { used: state.budget.unfollows, max: config.maxUnfollows, label: "unfollow" };
+    case "delete":
+      return { used: state.budget.deletes, max: config.maxDeletes, label: "delete" };
     default:
       return { used: 0, max: -1, label: "unknown" };
   }
@@ -151,6 +172,8 @@ function remainingSummary(state: StateFile, config: BudgetConfig): string {
   parts.push(remainingPart(state.budget.likes, config.maxLikes, "likes"));
   parts.push(remainingPart(state.budget.retweets, config.maxRetweets, "retweets"));
   parts.push(remainingPart(state.budget.follows, config.maxFollows, "follows"));
+  parts.push(remainingPart(state.budget.unfollows, config.maxUnfollows, "unfollows"));
+  parts.push(remainingPart(state.budget.deletes, config.maxDeletes, "deletes"));
   return parts.join(", ");
 }
 
@@ -201,6 +224,8 @@ export function recordAction(
   else if (action === "like") state.budget.likes++;
   else if (action === "retweet") state.budget.retweets++;
   else if (action === "follow") state.budget.follows++;
+  else if (action === "unfollow") state.budget.unfollows++;
+  else if (action === "delete") state.budget.deletes++;
 
   // Update last_write_at for any write action
   if (action) {
@@ -254,6 +279,23 @@ function closestMatch(input: string, candidates: string[], maxDistance = 3): str
   }
   return best;
 }
+
+// --- Protected accounts ---
+
+export function loadProtectedAccounts(): Set<string> {
+  return new Set(
+    (process.env.X_MCP_PROTECTED_ACCOUNTS || "")
+      .split(",")
+      .map((s) => s.trim().replace(/^@/, "").toLowerCase())
+      .filter(Boolean),
+  );
+}
+
+export function isProtectedAccount(username: string, protectedAccounts: Set<string>): boolean {
+  return protectedAccounts.has(username.replace(/^@/, "").toLowerCase());
+}
+
+// --- Self-describing error hints ---
 
 export function getParameterHint(toolName: string, unknownKey: string, validKeys?: string[]): string | null {
   // Check hardcoded hints first (e.g., "use reply_to_tweet tool instead")

@@ -135,14 +135,16 @@ describe("saveState", () => {
   it("round-trips state through save and load", () => {
     const now = new Date().toISOString();
     const state: StateFile = {
-      budget: { date: todayString(), replies: 5, originals: 1, likes: 12, retweets: 3, follows: 0 },
+      budget: { date: todayString(), replies: 5, originals: 1, likes: 12, retweets: 3, follows: 0, unfollows: 0, deletes: 0 },
       last_write_at: now,
       engaged: {
         replied_to: [{ tweet_id: "aaa", at: now }],
         liked: [{ tweet_id: "bbb", at: now }],
         retweeted: [],
         quoted: [{ tweet_id: "ccc", at: now }],
+        followed: [],
       },
+      workflows: [],
     };
 
     saveState(filePath, state);

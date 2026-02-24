@@ -19,6 +19,7 @@ export interface CompactUser {
   following: number;
   tweets: number;
   bio: string;
+  pinned_tweet_id: string | null;
 }
 
 interface TweetLike {
@@ -41,6 +42,7 @@ interface UserLike {
   name?: string;
   verified?: boolean;
   description?: string;
+  pinned_tweet_id?: string;
   public_metrics?: {
     followers_count?: number;
     following_count?: number;
@@ -101,6 +103,7 @@ export function compactUser(user: UserLike): CompactUser {
     following: metrics?.following_count ?? 0,
     tweets: metrics?.tweet_count ?? 0,
     bio: user.description ?? "",
+    pinned_tweet_id: user.pinned_tweet_id ?? null,
   };
 }
 

@@ -336,7 +336,7 @@ export class XApiClient {
   async getFollowers(userId: string, maxResults: number = 100, nextToken?: string) {
     const params = new URLSearchParams({
       max_results: Math.min(Math.max(maxResults, 1), 1000).toString(),
-      "user.fields": "created_at,description,public_metrics,verified",
+      "user.fields": "created_at,description,public_metrics,verified,pinned_tweet_id",
     });
     if (nextToken) params.set("pagination_token", nextToken);
 
@@ -348,7 +348,7 @@ export class XApiClient {
   async getFollowing(userId: string, maxResults: number = 100, nextToken?: string) {
     const params = new URLSearchParams({
       max_results: Math.min(Math.max(maxResults, 1), 1000).toString(),
-      "user.fields": "created_at,description,public_metrics,verified",
+      "user.fields": "created_at,description,public_metrics,verified,pinned_tweet_id",
     });
     if (nextToken) params.set("pagination_token", nextToken);
 
@@ -541,6 +541,66 @@ export class XApiClient {
     const requestData = { url, method };
     const authHeader = this.oauth.toHeader(this.oauth.authorize(requestData, this.token));
     return { Authorization: authHeader.Authorization };
+  }
+
+  // --- Undo operations ---
+
+  async unlikeTweet(tweetId: string) {
+    const userId = await this.getAuthenticatedUserId();
+    const response = await this.oauthFetch(
+      `${this.apiBase}/users/${userId}/likes/${tweetId}`,
+      "DELETE",
+    );
+    return this.handleResponse(response, "unlikeTweet");
+  }
+
+  async unretweet(tweetId: string) {
+    const userId = await this.getAuthenticatedUserId();
+    const response = await this.oauthFetch(
+      `${this.apiBase}/users/${userId}/retweets/${tweetId}`,
+      "DELETE",
+    );
+    return this.handleResponse(response, "unretweet");
+  }
+
+  // --- List operations ---
+
+  async getListMembers(listId: string, maxResults: number = 100, nextToken?: string) {
+    const params = new URLSearchParams({
+      max_results: Math.min(Math.max(maxResults, 1), 100).toString(),
+      "user.fields": "created_at,description,public_metrics,verified,pinned_tweet_id",
+    });
+    if (nextToken) params.set("pagination_token", nextToken);
+
+    const url = `${this.apiBase}/lists/${listId}/members?${params}`;
+    const response = await this.bearerFetch(url);
+    return this.handleResponse(response, "getListMembers");
+  }
+
+  async getListTweets(listId: string, maxResults: number = 100, nextToken?: string) {
+    const params = new URLSearchParams({
+      max_results: Math.min(Math.max(maxResults, 1), 100).toString(),
+      "tweet.fields": "created_at,public_metrics,author_id,conversation_id,entities,lang,note_tweet",
+      expansions: "author_id",
+      "user.fields": "name,username,verified,public_metrics",
+    });
+    if (nextToken) params.set("pagination_token", nextToken);
+
+    const url = `${this.apiBase}/lists/${listId}/tweets?${params}`;
+    const response = await this.bearerFetch(url);
+    return this.handleResponse(response, "getListTweets");
+  }
+
+  async getFollowedLists(maxResults: number = 100, nextToken?: string) {
+    const userId = await this.getAuthenticatedUserId();
+    const params = new URLSearchParams({
+      max_results: Math.min(Math.max(maxResults, 1), 100).toString(),
+    });
+    if (nextToken) params.set("pagination_token", nextToken);
+
+    const url = `${this.apiBase}/users/${userId}/followed_lists?${params}`;
+    const response = await this.bearerFetch(url);
+    return this.handleResponse(response, "getFollowedLists");
   }
 
   // --- Metrics ---
