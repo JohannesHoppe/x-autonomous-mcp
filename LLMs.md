@@ -6,7 +6,7 @@ You are an AI agent helping a user set up the x-autonomous-mcp server. This file
 
 ## What This Is
 
-x-autonomous-mcp is an MCP (Model Context Protocol) server that connects AI agents to the X (Twitter) API with built-in safety rails for autonomous operation. Once set up, you (the AI) will have access to tools for posting tweets, reading timelines, searching, liking, retweeting, uploading media, and more — with daily budget limits, engagement deduplication, and compact TOON-encoded responses to save your tokens.
+x-autonomous-mcp is an MCP (Model Context Protocol) server that connects AI agents to the X (Twitter) API with built-in safety rails for autonomous operation. Once set up, you (the AI) will have access to tools for posting tweets, reading timelines, searching, liking, retweeting, following/unfollowing, uploading media, and more — with daily budget limits, engagement deduplication, and compact TOON-encoded responses.
 
 **Response format:** By default, responses use TOON (Token-Oriented Object Notation) instead of JSON. You can parse TOON natively — field names appear once in headers, and array data uses CSV-style rows. If `X_MCP_TOON=false` is set, responses are non-pretty JSON instead.
 

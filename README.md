@@ -41,14 +41,14 @@ Every MCP response includes the remaining budget — reads and writes alike. The
 Responses use [TOON (Token-Oriented Object Notation)](https://github.com/toon-format/toon) instead of JSON. For array-heavy responses (timelines, search results, followers), TOON declares field names once in a header and uses CSV-style rows — significantly fewer tokens than JSON:
 
 ```
-data[2]{id,text,author,likes,retweets,replies,created_at}:
-  "123",Hello world,@foo,9,2,0,"2026-02-23T17:00:01.000Z"
-  "456",Another tweet,@foo,3,0,1,"2026-02-23T16:00:00.000Z"
+data[2]{id,text,author,author_followers,author_ratio,likes,retweets,replies,is_reply_to,created_at}:
+  "123",Hello world,@foo,5200,2.1,9,2,0,null,"2026-02-23T17:00:01.000Z"
+  "456",Another tweet,@foo,5200,2.1,3,0,1,null,"2026-02-23T16:00:00.000Z"
 meta:
   result_count: 2
   next_token: abc
 rate_limit: 299/300 (900s)
-budget: "3/8 replies, 0/2 originals"
+budget: "3/8 replies, 0/2 originals, 5/20 likes, 1/5 retweets, 0/10 follows"
 ```
 
 Set `X_MCP_TOON=false` to get non-pretty JSON instead.
@@ -77,7 +77,7 @@ Valid parameters for post_tweet: text, poll_options, poll_duration_minutes, medi
 Destructive operations like `delete_tweet` and `unfollow_user` are **completely hidden** from the LLM unless explicitly opted in. The tools don't show up in the tool list at all — the LLM can't even attempt to call them.
 
 ```
-X_MCP_ENABLE_DANGEROUS=true   # Opt in to expose delete_tweet.
+X_MCP_ENABLE_DANGEROUS=true   # Opt in to expose delete_tweet, unfollow_user.
 ```
 
 ### Unknown parameter detection
@@ -117,7 +117,7 @@ search_tweets query="@mybot" since_id="2025881827982876805"
 
 ### Username or ID — everywhere
 
-All user-related tools (`get_timeline`, `get_followers`, `get_following`) accept either a `@username`, a plain username, or a numeric user ID. No more two-step "look up user first, then get timeline" dance. The server resolves it automatically.
+All user-related tools (`get_timeline`, `get_followers`, `get_following`, `follow_user`, `unfollow_user`, `get_non_followers`) accept either a `@username`, a plain username, or a numeric user ID. No more two-step "look up user first, then get timeline" dance. The server resolves it automatically.
 
 ```
 get_timeline user="@JohannesHoppe"
