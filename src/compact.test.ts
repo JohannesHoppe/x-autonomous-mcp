@@ -59,6 +59,34 @@ describe("compactTweet", () => {
     expect(result.replied_to_id).toBeNull();
   });
 
+  it("prefers note_tweet.text over text for long tweets", () => {
+    const tweet = {
+      id: "600",
+      text: "This is a truncated version of the...",
+      note_tweet: { text: "This is a truncated version of the full long tweet that premium users can post with up to 4000 characters" },
+      author_id: "456",
+      public_metrics: { like_count: 0, retweet_count: 0, reply_count: 0 },
+      created_at: "2026-02-23T14:00:00.000Z",
+    };
+    const users = [{ id: "456", username: "premium", name: "Premium User" }];
+
+    const result = compactTweet(tweet, users);
+    expect(result.text).toBe("This is a truncated version of the full long tweet that premium users can post with up to 4000 characters");
+  });
+
+  it("falls back to text when note_tweet is absent", () => {
+    const tweet = {
+      id: "601",
+      text: "Normal short tweet",
+      author_id: "456",
+      public_metrics: { like_count: 0, retweet_count: 0, reply_count: 0 },
+      created_at: "2026-02-23T14:00:00.000Z",
+    };
+
+    const result = compactTweet(tweet, []);
+    expect(result.text).toBe("Normal short tweet");
+  });
+
   it("uses author_id as fallback when user not in includes", () => {
     const tweet = {
       id: "300",

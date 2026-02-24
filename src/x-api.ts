@@ -218,7 +218,7 @@ export class XApiClient {
 
   async getTweet(tweetId: string) {
     const params = new URLSearchParams({
-      "tweet.fields": "created_at,public_metrics,author_id,conversation_id,in_reply_to_user_id,referenced_tweets,entities,lang",
+      "tweet.fields": "created_at,public_metrics,author_id,conversation_id,in_reply_to_user_id,referenced_tweets,entities,lang,note_tweet",
       expansions: "author_id",
       "user.fields": "name,username,verified,public_metrics",
     });
@@ -240,7 +240,7 @@ export class XApiClient {
     const params = new URLSearchParams({
       query,
       max_results: fetchCount.toString(),
-      "tweet.fields": "created_at,public_metrics,author_id,conversation_id,entities,lang",
+      "tweet.fields": "created_at,public_metrics,author_id,conversation_id,entities,lang,note_tweet",
       expansions: "author_id",
       "user.fields": "name,username,verified,public_metrics",
     });
@@ -306,7 +306,7 @@ export class XApiClient {
   async getTimeline(userId: string, maxResults: number = 10, nextToken?: string) {
     const params = new URLSearchParams({
       max_results: Math.min(Math.max(maxResults, 5), 100).toString(),
-      "tweet.fields": "created_at,public_metrics,author_id,conversation_id,entities,lang",
+      "tweet.fields": "created_at,public_metrics,author_id,conversation_id,entities,lang,note_tweet",
       expansions: "author_id",
       "user.fields": "name,username,verified,public_metrics",
     });
@@ -321,7 +321,7 @@ export class XApiClient {
     const userId = await this.getAuthenticatedUserId();
     const params = new URLSearchParams({
       max_results: Math.min(Math.max(maxResults, 5), 100).toString(),
-      "tweet.fields": "created_at,public_metrics,author_id,conversation_id,entities,lang",
+      "tweet.fields": "created_at,public_metrics,author_id,conversation_id,entities,lang,note_tweet",
       expansions: "author_id",
       "user.fields": "name,username,verified,public_metrics",
     });

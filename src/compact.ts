@@ -24,6 +24,7 @@ export interface CompactUser {
 interface TweetLike {
   id?: string;
   text?: string;
+  note_tweet?: { text?: string };
   author_id?: string;
   public_metrics?: {
     like_count?: number;
@@ -78,7 +79,7 @@ export function compactTweet(tweet: TweetLike, users: UserLike[]): CompactTweet 
 
   return {
     id: tweet.id ?? "",
-    text: tweet.text ?? "",
+    text: tweet.note_tweet?.text ?? tweet.text ?? "",
     author: author?.username ? `@${author.username}` : (tweet.author_id ?? "unknown"),
     author_followers: authorFollowers,
     author_follower_ratio: author ? followerRatio(authorFollowers, authorFollowing) : 0,
