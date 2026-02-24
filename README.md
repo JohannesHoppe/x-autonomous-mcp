@@ -55,7 +55,7 @@ Set `X_MCP_TOON=false` to get non-pretty JSON instead.
 
 ### Compact responses (default on)
 
-Strips fields the LLM doesn't need. Dropped: `entities`, `edit_history_tweet_ids`, `conversation_id`, `lang`, `annotations`, URL expansions, image metadata. Flattens `public_metrics` and resolves `author_id` to `@username`.
+Strips fields the LLM doesn't need. Dropped: `entities`, `edit_history_tweet_ids`, `conversation_id`, `lang`, `annotations`, URL expansions, image metadata. Flattens `public_metrics` and resolves `author_id` to `@username`. Long tweets (premium, >280 chars) are transparently merged — the `text` field always contains the full text regardless of tweet length.
 
 ### Engagement deduplication (default on)
 

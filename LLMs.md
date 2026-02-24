@@ -10,6 +10,8 @@ x-autonomous-mcp is an MCP (Model Context Protocol) server that connects AI agen
 
 **Response format:** By default, responses use TOON (Token-Oriented Object Notation) instead of JSON. You can parse TOON natively — field names appear once in headers, and array data uses CSV-style rows. If `X_MCP_TOON=false` is set, responses are non-pretty JSON instead.
 
+**Long tweets:** The `text` field always contains the full tweet text, even for premium long tweets (>280 characters). No special handling needed — truncation is resolved server-side.
+
 ## Prerequisites
 
 - Node.js 18+ installed
