@@ -53,24 +53,24 @@ describe("formatResult", () => {
     expect(result).toEqual({ data: { id: "1" } });
   });
 
-  it("includes rate_limit when non-empty", () => {
+  it("includes x_rate_limit when non-empty", () => {
     const result = JSON.parse(formatResult({ id: "1" }, "5/15 remaining"));
-    expect(result.rate_limit).toBe("5/15 remaining");
+    expect(result.x_rate_limit).toBe("5/15 remaining");
   });
 
-  it("omits rate_limit when empty string", () => {
+  it("omits x_rate_limit when empty string", () => {
     const result = JSON.parse(formatResult({}, ""));
-    expect(result).not.toHaveProperty("rate_limit");
+    expect(result).not.toHaveProperty("x_rate_limit");
   });
 
-  it("includes budget string when provided", () => {
+  it("includes x_budget string when provided", () => {
     const result = JSON.parse(formatResult({ id: "1" }, "", "3/8 replies, 0/2 originals"));
-    expect(result.budget).toBe("3/8 replies, 0/2 originals");
+    expect(result.x_budget).toBe("3/8 replies, 0/2 originals");
   });
 
-  it("omits budget when undefined", () => {
+  it("omits x_budget when undefined", () => {
     const result = JSON.parse(formatResult({ id: "1" }, ""));
-    expect(result).not.toHaveProperty("budget");
+    expect(result).not.toHaveProperty("x_budget");
   });
 
   it("compacts tweet response when compact=true (no double data wrapping)", () => {
@@ -119,7 +119,7 @@ describe("formatResult", () => {
     };
     const result = JSON.parse(formatResult(apiResponse, "", "3/8 replies", true));
     expect(result.meta).toEqual({ result_count: 1, next_token: "abc" });
-    expect(result.budget).toBe("3/8 replies");
+    expect(result.x_budget).toBe("3/8 replies");
     expect(result.data).toHaveLength(1);
     expect(result.data[0].author).toBe("@u");
   });
@@ -131,7 +131,7 @@ describe("formatResult", () => {
     // Should contain TOON key-value format
     expect(result).toContain("data:");
     expect(result).toContain("id: ");
-    expect(result).toContain("rate_limit: 5/15");
+    expect(result).toContain("x_rate_limit: 5/15");
   });
 
   it("returns TOON with compact+toon combination", () => {
@@ -152,14 +152,14 @@ describe("formatResult", () => {
     expect(() => JSON.parse(result)).toThrow();
     // Compact fields should appear
     expect(result).toContain("@author");
-    expect(result).toContain("budget:");
-    expect(result).toContain("rate_limit:");
+    expect(result).toContain("x_budget:");
+    expect(result).toContain("x_rate_limit:");
   });
 
   it("returns JSON (not TOON) when toon=false", () => {
     const result = formatResult({ id: "1" }, "5/15", undefined, false, false);
     const parsed = JSON.parse(result);
     expect(parsed.data.id).toBe("1");
-    expect(parsed.rate_limit).toBe("5/15");
+    expect(parsed.x_rate_limit).toBe("5/15");
   });
 });

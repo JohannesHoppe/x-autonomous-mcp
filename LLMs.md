@@ -319,7 +319,7 @@ For `search_tweets`, the `query` parameter supports X's full search syntax:
 
 ## Example Responses
 
-Responses use TOON format by default (field names once in header, CSV-style rows for arrays). Every response includes `rate_limit` and `budget`.
+Responses use TOON format by default (field names once in header, CSV-style rows for arrays). Every response includes `x_rate_limit` and `x_budget`.
 
 **Tweet list** (get_timeline, search_tweets, get_mentions):
 ```
@@ -329,8 +329,8 @@ data[2]{id,text,author,author_followers,author_ratio,likes,retweets,replies,is_r
 meta:
   result_count: 2
   next_token: abc123
-rate_limit: 299/300 (900s)
-budget: "3/8 replies, 0/2 originals, 5/20 likes, 1/5 retweets, 0/10 follows"
+x_rate_limit: 299/300 (900s)
+x_budget: "3/8 replies, 0/2 originals, 5/20 likes, 1/5 retweets, 0/10 follows"
 ```
 
 - `author_followers`: raw follower count
@@ -350,8 +350,8 @@ data:
   replies: 89
   is_reply_to: null
   created_at: "2026-02-23T17:00:01.000Z"
-rate_limit: 299/300 (900s)
-budget: "3/8 replies, 0/2 originals, 5/20 likes, 1/5 retweets, 0/10 follows"
+x_rate_limit: 299/300 (900s)
+x_budget: "3/8 replies, 0/2 originals, 5/20 likes, 1/5 retweets, 0/10 follows"
 ```
 
 **User profile** (get_user):
@@ -364,8 +364,8 @@ data:
   following: 567
   tweets: 890
   bio: Building things with TypeScript and AI
-rate_limit: 299/300 (900s)
-budget: "0/8 replies, 0/2 originals, 0/20 likes, 0/5 retweets, 0/10 follows"
+x_rate_limit: 299/300 (900s)
+x_budget: "0/8 replies, 0/2 originals, 0/20 likes, 0/5 retweets, 0/10 follows"
 ```
 
 **User list** (get_followers, get_following, get_non_followers):
@@ -376,8 +376,8 @@ data[2]{id,username,name,followers,following,tweets,bio}:
 meta:
   result_count: 2
   next_token: def456
-rate_limit: 14/15 (900s)
-budget: "0/8 replies, 0/2 originals, 0/20 likes, 0/5 retweets, 0/10 follows"
+x_rate_limit: 14/15 (900s)
+x_budget: "0/8 replies, 0/2 originals, 0/20 likes, 0/5 retweets, 0/10 follows"
 ```
 
 **Write result** (post_tweet, reply_to_tweet, quote_tweet):
@@ -385,16 +385,16 @@ budget: "0/8 replies, 0/2 originals, 0/20 likes, 0/5 retweets, 0/10 follows"
 data:
   id: "1893661000"
   text: Hello world!
-rate_limit: 199/200 (900s)
-budget: "0/8 replies, 1/2 originals, 0/20 likes, 0/5 retweets, 0/10 follows | last action: 0s ago"
+x_rate_limit: 199/200 (900s)
+x_budget: "0/8 replies, 1/2 originals, 0/20 likes, 0/5 retweets, 0/10 follows | last action: 0s ago"
 ```
 
 **Engagement result** (like_tweet, retweet, follow_user):
 ```
 data:
   liked: true
-rate_limit: 199/200 (900s)
-budget: "0/8 replies, 0/2 originals, 1/20 likes, 0/5 retweets, 0/10 follows | last action: 0s ago"
+x_rate_limit: 199/200 (900s)
+x_budget: "0/8 replies, 0/2 originals, 1/20 likes, 0/5 retweets, 0/10 follows | last action: 0s ago"
 ```
 
 ## Common Patterns

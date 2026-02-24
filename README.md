@@ -31,8 +31,8 @@ Every MCP response includes the remaining budget — reads and writes alike. The
 ```json
 {
   "data": { "id": "123", "text": "..." },
-  "rate_limit": "299/300 remaining, resets in 900s",
-  "budget": "3/8 replies, 0/2 originals, 5/20 likes, 1/5 retweets, 0/10 follows | last action: 3m ago"
+  "x_rate_limit": "299/300 remaining, resets in 900s",
+  "x_budget": "3/8 replies, 0/2 originals, 5/20 likes, 1/5 retweets, 0/10 follows | last action: 3m ago"
 }
 ```
 
@@ -47,8 +47,8 @@ data[2]{id,text,author,author_followers,author_ratio,likes,retweets,replies,is_r
 meta:
   result_count: 2
   next_token: abc
-rate_limit: 299/300 (900s)
-budget: "3/8 replies, 0/2 originals, 5/20 likes, 1/5 retweets, 0/10 follows"
+x_rate_limit: 299/300 (900s)
+x_budget: "3/8 replies, 0/2 originals, 5/20 likes, 1/5 retweets, 0/10 follows"
 ```
 
 Set `X_MCP_TOON=false` to get non-pretty JSON instead.
@@ -153,7 +153,7 @@ Search results and timeline tweets include **`author_followers`** (raw count) an
 
 ## Example Responses (TOON format)
 
-Every response includes `rate_limit` and `budget` fields. Array endpoints use TOON's tabular format (field names once in header, CSV-style rows). Set `X_MCP_TOON=false` for JSON instead.
+Every response includes `x_rate_limit` and `x_budget` fields. Array endpoints use TOON's tabular format (field names once in header, CSV-style rows). Set `X_MCP_TOON=false` for JSON instead.
 
 ### get_timeline / search_tweets / get_mentions
 
@@ -165,8 +165,8 @@ data[3]{id,text,author,author_followers,author_ratio,likes,retweets,replies,is_r
 meta:
   result_count: 3
   next_token: abc123
-rate_limit: 299/300 (900s)
-budget: "3/8 replies, 0/2 originals, 5/20 likes, 1/5 retweets, 0/10 follows | last action: 3m ago"
+x_rate_limit: 299/300 (900s)
+x_budget: "3/8 replies, 0/2 originals, 5/20 likes, 1/5 retweets, 0/10 follows | last action: 3m ago"
 ```
 
 Compact tweets include `author_followers` (raw count) and `author_ratio` (followers/following, precomputed). `is_reply_to` is `null` for standalone tweets, or a tweet ID for replies.
@@ -185,8 +185,8 @@ data:
   replies: 89
   is_reply_to: null
   created_at: "2026-02-23T17:00:01.000Z"
-rate_limit: 299/300 (900s)
-budget: "3/8 replies, 0/2 originals, 5/20 likes, 1/5 retweets, 0/10 follows"
+x_rate_limit: 299/300 (900s)
+x_budget: "3/8 replies, 0/2 originals, 5/20 likes, 1/5 retweets, 0/10 follows"
 ```
 
 ### get_user
@@ -200,8 +200,8 @@ data:
   following: 567
   tweets: 890
   bio: Building things with TypeScript and AI
-rate_limit: 299/300 (900s)
-budget: "0/8 replies, 0/2 originals, 0/20 likes, 0/5 retweets, 0/10 follows"
+x_rate_limit: 299/300 (900s)
+x_budget: "0/8 replies, 0/2 originals, 0/20 likes, 0/5 retweets, 0/10 follows"
 ```
 
 ### get_followers / get_following
@@ -213,8 +213,8 @@ data[2]{id,username,name,followers,following,tweets,bio}:
 meta:
   result_count: 2
   next_token: def456
-rate_limit: 14/15 (900s)
-budget: "0/8 replies, 0/2 originals, 0/20 likes, 0/5 retweets, 0/10 follows"
+x_rate_limit: 14/15 (900s)
+x_budget: "0/8 replies, 0/2 originals, 0/20 likes, 0/5 retweets, 0/10 follows"
 ```
 
 ### get_non_followers
@@ -226,8 +226,8 @@ data[2]{id,username,name,followers,following,tweets,bio}:
 total_following: 567
 total_followers: 1234
 non_followers_count: 2
-rate_limit: 14/15 (900s)
-budget: "0/8 replies, 0/2 originals, 0/20 likes, 0/5 retweets, 0/10 follows"
+x_rate_limit: 14/15 (900s)
+x_budget: "0/8 replies, 0/2 originals, 0/20 likes, 0/5 retweets, 0/10 follows"
 ```
 
 Sorted by follower count ascending (lowest quality first = best unfollow candidates).
@@ -238,8 +238,8 @@ Sorted by follower count ascending (lowest quality first = best unfollow candida
 data:
   id: "1893661000"
   text: Hello world!
-rate_limit: 199/200 (900s)
-budget: "0/8 replies, 1/2 originals, 0/20 likes, 0/5 retweets, 0/10 follows | last action: 0s ago"
+x_rate_limit: 199/200 (900s)
+x_budget: "0/8 replies, 1/2 originals, 0/20 likes, 0/5 retweets, 0/10 follows | last action: 0s ago"
 ```
 
 ### like_tweet / retweet / follow_user
@@ -247,8 +247,8 @@ budget: "0/8 replies, 1/2 originals, 0/20 likes, 0/5 retweets, 0/10 follows | la
 ```
 data:
   liked: true
-rate_limit: 199/200 (900s)
-budget: "0/8 replies, 0/2 originals, 1/20 likes, 0/5 retweets, 0/10 follows | last action: 0s ago"
+x_rate_limit: 199/200 (900s)
+x_budget: "0/8 replies, 0/2 originals, 1/20 likes, 0/5 retweets, 0/10 follows | last action: 0s ago"
 ```
 
 ### get_metrics
@@ -264,8 +264,8 @@ data:
     quote_count: 23
     bookmark_count: 156
     impression_count: 892340
-rate_limit: 299/300 (900s)
-budget: "0/8 replies, 0/2 originals, 0/20 likes, 0/5 retweets, 0/10 follows"
+x_rate_limit: 299/300 (900s)
+x_budget: "0/8 replies, 0/2 originals, 0/20 likes, 0/5 retweets, 0/10 follows"
 ```
 
 ### upload_media
@@ -273,8 +273,8 @@ budget: "0/8 replies, 0/2 originals, 0/20 likes, 0/5 retweets, 0/10 follows"
 ```
 media_id: "1893670001"
 message: Upload complete. Use this media_id in post_tweet.
-rate_limit: 299/300 (900s)
-budget: "0/8 replies, 0/2 originals, 0/20 likes, 0/5 retweets, 0/10 follows"
+x_rate_limit: 299/300 (900s)
+x_budget: "0/8 replies, 0/2 originals, 0/20 likes, 0/5 retweets, 0/10 follows"
 ```
 
 ### Error responses
@@ -283,14 +283,14 @@ Budget exhausted:
 ```
 Error: Daily reply limit reached (8/8). Try again tomorrow. Remaining today: 0 replies, 2 originals, 15 likes, 5 retweets, 10 follows.
 
-Current budget: 8/8 replies (LIMIT REACHED), 0/2 originals, 5/20 likes, 0/5 retweets, 0/10 follows
+Current x_budget: 8/8 replies (LIMIT REACHED), 0/2 originals, 5/20 likes, 0/5 retweets, 0/10 follows
 ```
 
 Duplicate engagement:
 ```
 Error: Already liked tweet 1893660912 at 2026-02-23T10:00:00.000Z. Duplicate blocked.
 
-Current budget: 3/8 replies, 0/2 originals, 5/20 likes, 1/5 retweets, 0/10 follows
+Current x_budget: 3/8 replies, 0/2 originals, 5/20 likes, 1/5 retweets, 0/10 follows
 ```
 
 Unknown parameter:
@@ -299,7 +299,7 @@ Error: Unknown parameter 'poll_option': Did you mean 'poll_options'?
 
 Valid parameters for post_tweet: text, poll_options, poll_duration_minutes, media_ids
 
-Current budget: 0/8 replies, 0/2 originals, 0/20 likes, 0/5 retweets, 0/10 follows
+Current x_budget: 0/8 replies, 0/2 originals, 0/20 likes, 0/5 retweets, 0/10 follows
 ```
 
 ---

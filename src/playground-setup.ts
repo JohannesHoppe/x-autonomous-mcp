@@ -40,19 +40,42 @@ function findBinary(): string | null {
   }
 }
 
-export async function setup() {
-  if (await isRunning()) {
-    console.log(`  Playground already running on port ${PORT}`);
-    return;
+async function killExisting(): Promise<void> {
+  // Kill any existing playground process on our port to get fresh rate limits
+  try {
+    const pid = execSync(`lsof -ti tcp:${PORT}`, { encoding: "utf-8" }).trim();
+    if (pid) {
+      process.kill(Number(pid), "SIGTERM");
+      // Wait for port to be released
+      const start = Date.now();
+      while (Date.now() - start < 3000) {
+        if (!(await isRunning())) break;
+        await new Promise((r) => setTimeout(r, 100));
+      }
+    }
+  } catch {
+    // No process on that port, or kill failed — either way, continue
   }
+}
 
+export async function setup() {
   const binary = findBinary();
   if (!binary) {
+    if (await isRunning()) {
+      console.log(`  Playground already running on port ${PORT} (no binary to restart)`);
+      return;
+    }
     console.warn(
       `\n  ⚠ playground binary not found. Install with:\n` +
       `    go install github.com/xdevplatform/playground/cmd/playground@latest\n`,
     );
     return;
+  }
+
+  // Always restart to get fresh rate limits
+  if (await isRunning()) {
+    console.log(`  Restarting playground for fresh rate limits...`);
+    await killExisting();
   }
 
   console.log(`  Starting playground on port ${PORT}...`);

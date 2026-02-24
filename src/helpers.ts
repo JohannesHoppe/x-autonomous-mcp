@@ -25,7 +25,7 @@ export function errorMessage(e: unknown): string {
  * Format API result and rate limit info as a JSON string for MCP responses.
  *
  * In compact mode, compactResponse preserves the API's { data, meta } shape,
- * so we merge rate_limit/budget into that structure directly — no extra wrapper.
+ * so we merge x_rate_limit/budget into that structure directly — no extra wrapper.
  * In non-compact mode, we wrap the raw API response in { data: ... } as an
  * MCP envelope.
  */
@@ -42,7 +42,7 @@ export function formatResult(
     const compacted = compactResponse(data);
     if (compacted && typeof compacted === "object") {
       // compactResponse returns { data: compactTweet/User, meta?: ... } or passthrough
-      // Merge budget/rate_limit alongside data/meta — no extra wrapping
+      // Merge budget/x_rate_limit alongside data/meta — no extra wrapping
       output = { ...(compacted as Record<string, unknown>) };
     } else {
       output = { data: compacted };
@@ -51,8 +51,8 @@ export function formatResult(
     output = { data };
   }
 
-  if (rateLimit) output.rate_limit = rateLimit;
-  if (budgetString) output.budget = budgetString;
+  if (rateLimit) output.x_rate_limit = rateLimit;
+  if (budgetString) output.x_budget = budgetString;
   if (toon) return encode(output);
   return JSON.stringify(output);
 }

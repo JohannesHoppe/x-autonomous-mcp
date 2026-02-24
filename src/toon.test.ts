@@ -152,8 +152,8 @@ describe("TOON encode", () => {
           { id: "456", text: "Another tweet", author: "@foo", likes: 3, retweets: 0, replies: 1, created_at: "2026-02-23T16:00:00.000Z" },
         ],
         meta: { result_count: 2, next_token: "abc" },
-        rate_limit: "299/300 (900s)",
-        budget: "3/8 replies, 0/2 originals",
+        x_rate_limit: "299/300 (900s)",
+        x_budget: "3/8 replies, 0/2 originals",
       };
 
       const result = encode(response);
@@ -168,15 +168,15 @@ describe("TOON encode", () => {
       expect(lines[3]).toBe("meta:");
       expect(lines[4]).toBe("  result_count: 2");
       expect(lines[5]).toBe("  next_token: abc");
-      // Scalar fields (budget has commas, gets quoted)
-      expect(lines[6]).toBe("rate_limit: 299/300 (900s)");
-      expect(lines[7]).toBe('budget: "3/8 replies, 0/2 originals"');
+      // Scalar fields (x_budget has commas, gets quoted)
+      expect(lines[6]).toBe("x_rate_limit: 299/300 (900s)");
+      expect(lines[7]).toBe('x_budget: "3/8 replies, 0/2 originals"');
     });
 
     it("encodes a single tweet response", () => {
       const response = {
         data: { id: "123", text: "Hello", author: "@foo", likes: 5, retweets: 1, replies: 0 },
-        rate_limit: "299/300 (900s)",
+        x_rate_limit: "299/300 (900s)",
       };
 
       const result = encode(response);
@@ -185,7 +185,7 @@ describe("TOON encode", () => {
       expect(result).toContain('  id: "123"');
       expect(result).toContain("  text: Hello");
       expect(result).toContain("  author: @foo");
-      expect(result).toContain("rate_limit: 299/300 (900s)");
+      expect(result).toContain("x_rate_limit: 299/300 (900s)");
     });
 
     it("encodes a user list response", () => {

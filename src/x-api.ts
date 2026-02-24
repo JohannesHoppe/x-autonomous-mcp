@@ -120,7 +120,7 @@ export class XApiClient {
         ? new Date(rateLimit.reset * 1000).toISOString()
         : "unknown";
       throw new Error(
-        `Rate limited on ${operation}. Reset at: ${resetTime}. ${rateLimitStr}`,
+        `X API rate limited on ${operation}. Reset at: ${resetTime}. ${rateLimitStr}`,
       );
     }
 

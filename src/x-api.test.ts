@@ -90,7 +90,7 @@ describe("XApiClient", () => {
         },
       );
       const client = makeClient();
-      await expect(client.getTweet("999")).rejects.toThrow("Rate limited");
+      await expect(client.getTweet("999")).rejects.toThrow("X API rate limited");
     });
   });
 
