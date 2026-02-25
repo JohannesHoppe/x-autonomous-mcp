@@ -282,17 +282,22 @@ function closestMatch(input: string, candidates: string[], maxDistance = 3): str
 
 // --- Protected accounts ---
 
-export function loadProtectedAccounts(): Set<string> {
-  return new Set(
-    (process.env.X_MCP_PROTECTED_ACCOUNTS || "")
-      .split(",")
-      .map((s) => s.trim().replace(/^@/, "").toLowerCase())
-      .filter(Boolean),
-  );
+export interface ProtectedAccount {
+  username: string;
+  userId: string | null; // populated at startup via resolveProtectedAccountIds
 }
 
-export function isProtectedAccount(username: string, protectedAccounts: Set<string>): boolean {
-  return protectedAccounts.has(username.replace(/^@/, "").toLowerCase());
+export function loadProtectedAccounts(): ProtectedAccount[] {
+  return (process.env.X_MCP_PROTECTED_ACCOUNTS || "")
+    .split(",")
+    .map((s) => s.trim().replace(/^@/, "").toLowerCase())
+    .filter(Boolean)
+    .map((username) => ({ username, userId: null }));
+}
+
+export function isProtectedAccount(input: string, protectedAccounts: ProtectedAccount[]): boolean {
+  const normalized = input.replace(/^@/, "").toLowerCase();
+  return protectedAccounts.some((a) => a.username === normalized || a.userId === normalized);
 }
 
 export function getParameterHint(toolName: string, unknownKey: string, validKeys?: string[]): string | null {

@@ -2,7 +2,7 @@ import type { StateFile, Workflow } from "./state.js";
 import type { XApiClient } from "./x-api.js";
 import type { BudgetConfig } from "./safety.js";
 import { getMaxWorkflows } from "./state.js";
-import { checkBudget, recordAction, checkDedup, isProtectedAccount } from "./safety.js";
+import { checkBudget, recordAction, checkDedup, isProtectedAccount, type ProtectedAccount } from "./safety.js";
 
 // --- Workflow step types ---
 
@@ -27,7 +27,7 @@ async function advanceFollowCycle(
   client: XApiClient,
   state: StateFile,
   budgetConfig: BudgetConfig,
-  protectedAccounts: Set<string>,
+  protectedAccounts: ProtectedAccount[],
 ): Promise<{ llmNeeded: boolean; summary: string | null }> {
   const step = workflow.current_step;
 
@@ -339,7 +339,7 @@ export async function processWorkflows(
   state: StateFile,
   client: XApiClient,
   budgetConfig: BudgetConfig,
-  protectedAccounts: Set<string>,
+  protectedAccounts: ProtectedAccount[],
 ): Promise<WorkflowResult> {
   const autoCompleted: string[] = [];
   let nextTask: LlmTask | null = null;
@@ -512,7 +512,7 @@ export async function cleanupNonFollowers(
   client: XApiClient,
   state: StateFile,
   budgetConfig: BudgetConfig,
-  protectedAccounts: Set<string>,
+  protectedAccounts: ProtectedAccount[],
   maxUnfollow: number = 10,
   maxPages: number = 5,
 ): Promise<{ unfollowed: string[]; skipped: string[]; error: string | null }> {

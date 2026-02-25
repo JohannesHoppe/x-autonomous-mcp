@@ -258,7 +258,7 @@ describe("processWorkflows — follow_cycle", () => {
     const client = makeMockClient();
     const config = makeConfig();
 
-    const result = await processWorkflows(state, client, config, new Set());
+    const result = await processWorkflows(state, client, config, []);
 
     expect(client.followUser).toHaveBeenCalledWith("12345");
     expect(client.getUser).toHaveBeenCalled();
@@ -290,7 +290,7 @@ describe("processWorkflows — follow_cycle", () => {
     });
     const client = makeMockClient();
 
-    await processWorkflows(state, client, makeConfig(), new Set());
+    await processWorkflows(state, client, makeConfig(), []);
 
     expect(client.followUser).not.toHaveBeenCalled();
     expect(workflow.outcome).toBe("skipped_duplicate");
@@ -305,7 +305,7 @@ describe("processWorkflows — follow_cycle", () => {
     });
     const client = makeMockClient();
 
-    const result = await processWorkflows(state, client, makeConfig(), new Set());
+    const result = await processWorkflows(state, client, makeConfig(), []);
 
     expect(client.followUser).not.toHaveBeenCalled();
     expect(result.auto_completed[0]).toContain("budget exhausted");
@@ -319,7 +319,7 @@ describe("processWorkflows — follow_cycle", () => {
     const state = makeState({ workflows: [workflow] });
     const client = makeMockClient();
 
-    await processWorkflows(state, client, makeConfig(), new Set());
+    await processWorkflows(state, client, makeConfig(), []);
 
     expect(client.postTweet).toHaveBeenCalledWith({
       text: "Great insight!",
@@ -343,7 +343,7 @@ describe("processWorkflows — follow_cycle", () => {
     const state = makeState({ workflows: [workflow] });
     const client = makeMockClient();
 
-    const result = await processWorkflows(state, client, makeConfig(), new Set());
+    const result = await processWorkflows(state, client, makeConfig(), []);
 
     expect(workflow.current_step).toBe("waiting"); // unchanged
     expect(result.next_task).toBeNull();
@@ -360,7 +360,7 @@ describe("processWorkflows — follow_cycle", () => {
     // Mock: target's following list does NOT include our ID → not followed back
     const client = makeMockClient();
 
-    await processWorkflows(state, client, makeConfig(), new Set());
+    await processWorkflows(state, client, makeConfig(), []);
 
     expect(client.getFollowing).toHaveBeenCalled();
     // Since mock getFollowing returns empty array → not followed back → cleanup
@@ -383,7 +383,7 @@ describe("processWorkflows — follow_cycle", () => {
       }),
     });
 
-    await processWorkflows(state, client, makeConfig(), new Set());
+    await processWorkflows(state, client, makeConfig(), []);
 
     expect(workflow.outcome).toBe("followed_back");
     expect(workflow.current_step).toBe("done");
@@ -409,7 +409,7 @@ describe("processWorkflows — follow_cycle", () => {
         }),
     });
 
-    await processWorkflows(state, client, makeConfig(), new Set());
+    await processWorkflows(state, client, makeConfig(), []);
 
     expect(client.getFollowing).toHaveBeenCalledTimes(2);
     expect(workflow.outcome).toBe("followed_back");
@@ -423,7 +423,7 @@ describe("processWorkflows — follow_cycle", () => {
     const state = makeState({ workflows: [workflow] });
     const client = makeMockClient();
 
-    await processWorkflows(state, client, makeConfig(), new Set(["testuser"]));
+    await processWorkflows(state, client, makeConfig(), [{ username: "testuser", userId: "12345" }]);
 
     expect(client.unfollowUser).not.toHaveBeenCalled();
     expect(workflow.outcome).toBe("protected_kept");
@@ -437,7 +437,7 @@ describe("processWorkflows — follow_cycle", () => {
     const state = makeState({ workflows: [workflow] });
     const client = makeMockClient();
 
-    await processWorkflows(state, client, makeConfig(), new Set());
+    await processWorkflows(state, client, makeConfig(), []);
 
     expect(client.unlikeTweet).toHaveBeenCalledWith("pin123");
     expect(client.deleteTweet).toHaveBeenCalledWith("reply789");
@@ -460,7 +460,7 @@ describe("processWorkflows — follow_cycle", () => {
       getTimeline: vi.fn().mockResolvedValue({ result: { data: [] }, rateLimit: "" }),
     });
 
-    const result = await processWorkflows(state, client, makeConfig(), new Set());
+    const result = await processWorkflows(state, client, makeConfig(), []);
 
     expect(workflow.current_step).toBe("waiting");
     expect(workflow.check_after).not.toBeNull();
@@ -475,7 +475,7 @@ describe("processWorkflows — follow_cycle", () => {
       getUser: vi.fn().mockRejectedValue(new Error("getUser API error")),
     });
 
-    const result = await processWorkflows(state, client, makeConfig(), new Set());
+    const result = await processWorkflows(state, client, makeConfig(), []);
 
     expect(client.followUser).toHaveBeenCalled();
     expect(workflow.actions_done).toContain("followed");
@@ -490,7 +490,7 @@ describe("processWorkflows — follow_cycle", () => {
       likeTweet: vi.fn().mockRejectedValue(new Error("like API error")),
     });
 
-    const result = await processWorkflows(state, client, makeConfig(), new Set());
+    const result = await processWorkflows(state, client, makeConfig(), []);
 
     expect(workflow.actions_done).toContain("followed");
     expect(workflow.actions_done).not.toContain("liked_pinned");
@@ -505,7 +505,7 @@ describe("processWorkflows — follow_cycle", () => {
       followUser: vi.fn().mockRejectedValue(new Error("follow API error")),
     });
 
-    await processWorkflows(state, client, makeConfig(), new Set());
+    await processWorkflows(state, client, makeConfig(), []);
 
     expect(workflow.outcome).toBe("follow_failed");
     expect(workflow.current_step).toBe("done");
@@ -521,7 +521,7 @@ describe("processWorkflows — follow_cycle", () => {
       unlikeTweet: vi.fn().mockRejectedValue(new Error("unlike failed")),
     });
 
-    await processWorkflows(state, client, makeConfig(), new Set());
+    await processWorkflows(state, client, makeConfig(), []);
 
     expect(workflow.outcome).toBe("cleaned_up");
     expect(workflow.actions_done).not.toContain("unliked_pinned");
@@ -540,7 +540,7 @@ describe("processWorkflows — follow_cycle", () => {
     });
     const client = makeMockClient();
 
-    await processWorkflows(state, client, makeConfig(), new Set());
+    await processWorkflows(state, client, makeConfig(), []);
 
     expect(client.postTweet).not.toHaveBeenCalled();
     expect(workflow.current_step).toBe("waiting");
@@ -557,7 +557,7 @@ describe("processWorkflows — follow_cycle", () => {
       postTweet: vi.fn().mockRejectedValue(new Error("post failed")),
     });
 
-    await processWorkflows(state, client, makeConfig(), new Set());
+    await processWorkflows(state, client, makeConfig(), []);
 
     expect(workflow.current_step).toBe("waiting");
     expect(workflow.actions_done).toContain("reply_failed");
@@ -579,7 +579,7 @@ describe("processWorkflows — reply_track", () => {
     const state = makeState({ workflows: [workflow] });
     const client = makeMockClient();
 
-    await processWorkflows(state, client, makeConfig(), new Set());
+    await processWorkflows(state, client, makeConfig(), []);
 
     expect(workflow.current_step).toBe("waiting_audit");
     expect(workflow.check_after).not.toBeNull();
@@ -598,7 +598,7 @@ describe("processWorkflows — reply_track", () => {
     const state = makeState({ workflows: [workflow] });
     const client = makeMockClient();
 
-    await processWorkflows(state, client, makeConfig(), new Set());
+    await processWorkflows(state, client, makeConfig(), []);
 
     expect(workflow.current_step).toBe("waiting_audit"); // unchanged
   });
@@ -614,7 +614,7 @@ describe("processWorkflows — reply_track", () => {
     const state = makeState({ workflows: [workflow] });
     const client = makeMockClient(); // mock returns 5 likes, 2 replies
 
-    await processWorkflows(state, client, makeConfig(), new Set());
+    await processWorkflows(state, client, makeConfig(), []);
 
     expect(workflow.current_step).toBe("done");
     expect(workflow.outcome).toBe("audited_kept");
@@ -637,7 +637,7 @@ describe("processWorkflows — reply_track", () => {
       }),
     });
 
-    await processWorkflows(state, client, makeConfig(), new Set());
+    await processWorkflows(state, client, makeConfig(), []);
 
     expect(client.deleteTweet).toHaveBeenCalledWith("reply1");
     expect(workflow.outcome).toBe("deleted_low_engagement");
@@ -654,7 +654,7 @@ describe("processWorkflows — reply_track", () => {
     const state = makeState({ workflows: [workflow] });
     const client = makeMockClient();
 
-    await processWorkflows(state, client, makeConfig(), new Set());
+    await processWorkflows(state, client, makeConfig(), []);
 
     expect(workflow.outcome).toBe("no_tweet_to_audit");
     expect(workflow.current_step).toBe("done");
@@ -673,7 +673,7 @@ describe("processWorkflows — reply_track", () => {
       getTweetMetrics: vi.fn().mockRejectedValue(new Error("metrics API error")),
     });
 
-    await processWorkflows(state, client, makeConfig(), new Set());
+    await processWorkflows(state, client, makeConfig(), []);
 
     expect(workflow.outcome).toBe("audit_failed");
     expect(workflow.current_step).toBe("done");
@@ -689,7 +689,7 @@ describe("cleanupNonFollowers", () => {
     const state = makeState();
     const client = makeMockClient();
 
-    const result = await cleanupNonFollowers(client, state, makeConfig(), new Set(), 10, 5);
+    const result = await cleanupNonFollowers(client, state, makeConfig(), [], 10, 5);
 
     expect(result.unfollowed).toEqual(["@nonfollower1", "@nonfollower2", "@protecteduser"]);
     expect(result.skipped).toEqual([]);
@@ -700,7 +700,7 @@ describe("cleanupNonFollowers", () => {
   it("skips protected accounts", async () => {
     const state = makeState();
     const client = makeMockClient();
-    const protectedSet = new Set(["protecteduser"]);
+    const protectedSet = [{ username: "protecteduser", userId: "nf3" }];
 
     const result = await cleanupNonFollowers(client, state, makeConfig(), protectedSet, 10, 5);
 
@@ -712,7 +712,7 @@ describe("cleanupNonFollowers", () => {
     const state = makeState();
     const client = makeMockClient();
 
-    const result = await cleanupNonFollowers(client, state, makeConfig(), new Set(), 1, 5);
+    const result = await cleanupNonFollowers(client, state, makeConfig(), [], 1, 5);
 
     expect(result.unfollowed).toHaveLength(1);
   });
@@ -723,7 +723,7 @@ describe("cleanupNonFollowers", () => {
     });
     const client = makeMockClient();
 
-    const result = await cleanupNonFollowers(client, state, makeConfig(), new Set(), 10, 5);
+    const result = await cleanupNonFollowers(client, state, makeConfig(), [], 10, 5);
 
     expect(result.unfollowed).toEqual([]);
     expect(result.skipped).toContain("budget exhausted — stopped");
@@ -738,7 +738,7 @@ describe("cleanupNonFollowers", () => {
         .mockResolvedValueOnce({ result: { data: { following: false } }, rateLimit: "" }),
     });
 
-    const result = await cleanupNonFollowers(client, state, makeConfig(), new Set(), 10, 5);
+    const result = await cleanupNonFollowers(client, state, makeConfig(), [], 10, 5);
 
     expect(result.unfollowed).toEqual(["@nonfollower1", "@protecteduser"]);
     expect(result.skipped).toEqual(["@nonfollower2 (API error)"]);
@@ -751,7 +751,7 @@ describe("cleanupNonFollowers", () => {
       getNonFollowers: vi.fn().mockRejectedValue(new Error("API down")),
     });
 
-    const result = await cleanupNonFollowers(client, state, makeConfig(), new Set(), 10, 5);
+    const result = await cleanupNonFollowers(client, state, makeConfig(), [], 10, 5);
 
     expect(result.error).toContain("API down");
     expect(result.unfollowed).toEqual([]);
@@ -782,7 +782,7 @@ describe("processWorkflows — batch processing", () => {
     const state = makeState({ workflows: [wf1, wf2] });
     const client = makeMockClient();
 
-    const result = await processWorkflows(state, client, makeConfig(), new Set());
+    const result = await processWorkflows(state, client, makeConfig(), []);
 
     expect(wf1.outcome).not.toBeNull();
     expect(wf2.outcome).not.toBeNull();
@@ -797,7 +797,7 @@ describe("processWorkflows — batch processing", () => {
     const state = makeState({ workflows: [completed] });
     const client = makeMockClient();
 
-    const result = await processWorkflows(state, client, makeConfig(), new Set());
+    const result = await processWorkflows(state, client, makeConfig(), []);
 
     expect(result.auto_completed).toEqual([]);
     expect(result.next_task).toBeNull();
@@ -820,7 +820,7 @@ describe("processWorkflows — batch processing", () => {
     const state = makeState({ workflows: [wf1, wf2] });
     const client = makeMockClient();
 
-    const result = await processWorkflows(state, client, makeConfig(), new Set());
+    const result = await processWorkflows(state, client, makeConfig(), []);
 
     expect(result.next_task).not.toBeNull();
     expect(result.next_task!.workflow_id).toBe("fc:alice"); // first one

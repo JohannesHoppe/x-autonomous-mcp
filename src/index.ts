@@ -64,17 +64,15 @@ function formatWorkflowOutput(data: Record<string, unknown>): string {
 }
 
 /**
- * Resolve protected account usernames to numeric IDs and add both to the set.
- * One-time startup cost (1 API call per protected account). After this,
- * isProtectedAccount matches both "friend1" and "12345" with a set lookup.
+ * Resolve protected account usernames to numeric IDs (one API call each).
+ * After this, isProtectedAccount matches both usernames and numeric IDs.
  */
 async function resolveProtectedAccountIds(): Promise<void> {
-  if (protectedAccounts.size === 0) return;
-  for (const username of [...protectedAccounts]) {
+  for (const account of protectedAccounts) {
     try {
-      const userId = await client.resolveUserId(username);
-      if (userId && userId !== username) {
-        protectedAccounts.add(userId);
+      const userId = await client.resolveUserId(account.username);
+      if (userId && userId !== account.username) {
+        account.userId = userId;
       }
     } catch {
       // If resolution fails, username-based check still works
