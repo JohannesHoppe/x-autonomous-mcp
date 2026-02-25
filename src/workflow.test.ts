@@ -74,13 +74,15 @@ function makeMockClient(overrides?: Partial<Record<string, unknown>>): XApiClien
     getNonFollowers: vi.fn().mockResolvedValue({
       result: {
         data: [
-          { id: "nf1", username: "nonfollower1", name: "NF1", followers: 10, following: 100 },
-          { id: "nf2", username: "nonfollower2", name: "NF2", followers: 5, following: 50 },
-          { id: "nf3", username: "protecteduser", name: "Protected", followers: 100, following: 100 },
+          { id: "nf1", username: "nonfollower1", name: "NF1", public_metrics: { followers_count: 10, following_count: 100 } },
+          { id: "nf2", username: "nonfollower2", name: "NF2", public_metrics: { followers_count: 5, following_count: 50 } },
+          { id: "nf3", username: "protecteduser", name: "Protected", public_metrics: { followers_count: 100, following_count: 100 } },
         ],
-        total_following: 100,
-        total_followers: 50,
-        non_followers_count: 3,
+        meta: {
+          total_following: 100,
+          total_followers: 50,
+          non_followers_count: 3,
+        },
       },
       rateLimit: "",
     }),
@@ -274,6 +276,10 @@ describe("processWorkflows — follow_cycle", () => {
     expect(result.next_task!.workflow_id).toBe("fc:testuser");
     expect(result.next_task!.instruction).toContain("reply");
     expect(result.next_task!.context.author_followers).toBe("5000");
+
+    // Verify budget counters were incremented
+    expect(state.budget.follows).toBe(1);
+    expect(state.budget.likes).toBe(1);
   });
 
   it("skips duplicate follow", async () => {
@@ -323,6 +329,9 @@ describe("processWorkflows — follow_cycle", () => {
     expect(workflow.check_after).not.toBeNull();
     expect(workflow.context.reply_tweet_id).toBe("reply789");
     expect(workflow.actions_done).toContain("replied");
+
+    // Verify budget counter incremented
+    expect(state.budget.replies).toBe(1);
   });
 
   it("skips waiting workflows that haven't reached check_after", async () => {
@@ -437,6 +446,10 @@ describe("processWorkflows — follow_cycle", () => {
     expect(workflow.actions_done).toContain("unliked_pinned");
     expect(workflow.actions_done).toContain("deleted_reply");
     expect(workflow.actions_done).toContain("unfollowed");
+
+    // Verify budget counters incremented
+    expect(state.budget.deletes).toBe(1);
+    expect(state.budget.unfollows).toBe(1);
   });
 
   it("skips reply when no target tweet found in timeline", async () => {
@@ -572,12 +585,14 @@ describe("processWorkflows — reply_track", () => {
     expect(workflow.check_after).not.toBeNull();
   });
 
-  it("skips audit when under 48h", async () => {
+  it("skips audit when check_after is in the future", async () => {
+    const futureDate = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
     const workflow = makeWorkflow({
       id: "rt:testuser:123",
       type: "reply_track",
       current_step: "waiting_audit",
       created_at: new Date().toISOString(), // just created
+      check_after: futureDate,
       context: { reply_tweet_id: "reply1" },
     });
     const state = makeState({ workflows: [workflow] });
@@ -712,6 +727,22 @@ describe("cleanupNonFollowers", () => {
 
     expect(result.unfollowed).toEqual([]);
     expect(result.skipped).toContain("budget exhausted — stopped");
+  });
+
+  it("records API error for individual unfollow failures", async () => {
+    const state = makeState();
+    const client = makeMockClient({
+      unfollowUser: vi.fn()
+        .mockResolvedValueOnce({ result: { data: { following: false } }, rateLimit: "" })
+        .mockRejectedValueOnce(new Error("rate limited"))
+        .mockResolvedValueOnce({ result: { data: { following: false } }, rateLimit: "" }),
+    });
+
+    const result = await cleanupNonFollowers(client, state, makeConfig(), new Set(), 10, 5);
+
+    expect(result.unfollowed).toEqual(["@nonfollower1", "@protecteduser"]);
+    expect(result.skipped).toEqual(["@nonfollower2 (API error)"]);
+    expect(state.budget.unfollows).toBe(2);
   });
 
   it("handles API error during getNonFollowers", async () => {

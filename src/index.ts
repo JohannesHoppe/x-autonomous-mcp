@@ -8,6 +8,7 @@ import { fileURLToPath } from "url";
 import { z } from "zod";
 import { XApiClient } from "./x-api.js";
 import { parseTweetId, errorMessage, formatResult } from "./helpers.js";
+import { encode } from "./toon.js";
 import { loadState, saveState } from "./state.js";
 import {
   loadBudgetConfig,
@@ -56,6 +57,11 @@ const compactMode = process.env.X_MCP_COMPACT !== "false"; // default true
 const dedupEnabled = process.env.X_MCP_DEDUP !== "false"; // default true
 const toonEnabled = process.env.X_MCP_TOON !== "false"; // default true
 const protectedAccounts = loadProtectedAccounts();
+
+/** Format workflow tool output — uses TOON when enabled, otherwise JSON. */
+function formatWorkflowOutput(data: Record<string, unknown>): string {
+  return toonEnabled ? encode(data) : JSON.stringify(data, null, 2);
+}
 
 // --- MCP server ---
 
@@ -487,12 +493,23 @@ server.registerTool(
   async (args) => {
     try {
       const userRef = args.user as string;
-      // Check protected accounts before anything
-      if (isProtectedAccount(userRef, protectedAccounts)) {
+      // Resolve username for protected account check (numeric IDs need resolution)
+      let username = userRef.replace(/^@/, "").toLowerCase();
+      if (/^\d+$/.test(userRef)) {
+        try {
+          const { result } = await client.getUser({ userId: userRef });
+          const data = result as { data?: { username?: string } };
+          if (data.data?.username) username = data.data.username.toLowerCase();
+        } catch {
+          // If getUser fails, proceed with numeric ID (protection check won't match, but unfollow may still work)
+        }
+      }
+      // Check protected accounts
+      if (isProtectedAccount(username, protectedAccounts)) {
         const state = loadState(statePath);
         const budgetString = formatBudgetString(state, budgetConfig);
         return {
-          content: [{ type: "text" as const, text: `Error: @${userRef.replace(/^@/, "")} is a protected account. Cannot unfollow.\n\nCurrent x_budget: ${budgetString}` }],
+          content: [{ type: "text" as const, text: `Error: @${username} is a protected account. Cannot unfollow.\n\nCurrent x_budget: ${budgetString}` }],
           isError: true,
         };
       }
@@ -687,7 +704,7 @@ server.registerTool(
       output.x_budget = budgetString;
 
       return {
-        content: [{ type: "text" as const, text: JSON.stringify(output, null, 2) }],
+        content: [{ type: "text" as const, text: formatWorkflowOutput(output) }],
       };
     } catch (e: unknown) {
       return {
@@ -742,7 +759,7 @@ server.registerTool(
       output.x_budget = budgetString;
 
       return {
-        content: [{ type: "text" as const, text: JSON.stringify(output, null, 2) }],
+        content: [{ type: "text" as const, text: formatWorkflowOutput(output) }],
       };
     } catch (e: unknown) {
       return {
@@ -767,19 +784,9 @@ server.registerTool(
     try {
       const state = loadState(statePath);
       const targetRef = args.target as string;
-      const userId = await client.resolveUserId(targetRef);
-      // Resolve actual username — don't store numeric ID as username
-      let username: string;
-      if (/^\d+$/.test(targetRef)) {
-        const { result } = await client.getUser({ userId: targetRef });
-        const data = result as { data?: { username?: string } };
-        username = data.data?.username ?? targetRef;
-      } else {
-        username = targetRef.replace(/^@/, "");
-      }
-
-      // Build initial context for reply_track
       const workflowType = args.type as string;
+
+      // Validate required params before making API calls
       let initialContext: Record<string, string> | undefined;
       if (workflowType === "reply_track") {
         const replyTweetId = args.reply_tweet_id as string | undefined;
@@ -791,6 +798,17 @@ server.registerTool(
           };
         }
         initialContext = { reply_tweet_id: replyTweetId };
+      }
+
+      const userId = await client.resolveUserId(targetRef);
+      // Resolve actual username — don't store numeric ID as username
+      let username: string;
+      if (/^\d+$/.test(targetRef)) {
+        const { result } = await client.getUser({ userId: targetRef });
+        const data = result as { data?: { username?: string } };
+        username = data.data?.username ?? targetRef;
+      } else {
+        username = targetRef.replace(/^@/, "");
       }
 
       const { error } = createWorkflow(state, workflowType, userId, username, initialContext);
@@ -820,7 +838,7 @@ server.registerTool(
       output.x_budget = budgetString;
 
       return {
-        content: [{ type: "text" as const, text: JSON.stringify(output, null, 2) }],
+        content: [{ type: "text" as const, text: formatWorkflowOutput(output) }],
       };
     } catch (e: unknown) {
       return {
@@ -861,7 +879,7 @@ server.registerTool(
       }));
 
       return {
-        content: [{ type: "text" as const, text: JSON.stringify({ workflows: summary, count: workflows.length, x_budget: budgetString }, null, 2) }],
+        content: [{ type: "text" as const, text: formatWorkflowOutput({ workflows: summary, count: workflows.length, x_budget: budgetString }) }],
       };
     } catch (e: unknown) {
       return {
@@ -903,7 +921,7 @@ server.registerTool(
       if (result.error) output.error = result.error;
 
       return {
-        content: [{ type: "text" as const, text: JSON.stringify(output, null, 2) }],
+        content: [{ type: "text" as const, text: formatWorkflowOutput(output) }],
       };
     } catch (e: unknown) {
       return {

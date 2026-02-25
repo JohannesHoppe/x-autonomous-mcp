@@ -387,7 +387,7 @@ x_rate_limit: 299/300 (900s)
 x_budget: "0/8 replies used, 0/2 originals used, 0/20 likes used, 0/5 retweets used, 0/10 follows used, 0/10 unfollows used, 0/5 deletes used"
 ```
 
-**User list** (get_followers, get_following, get_non_followers):
+**User list** (get_followers, get_following):
 ```
 data[2]{id,username,name,followers,following,tweets,bio,pinned_tweet_id}:
   "123456",alice_dev,Alice,8900,450,1200,Full-stack engineer,"1893650100"
@@ -398,6 +398,20 @@ meta:
 x_rate_limit: 14/15 (900s)
 x_budget: "0/8 replies used, 0/2 originals used, 0/20 likes used, 0/5 retweets used, 0/10 follows used, 0/10 unfollows used, 0/5 deletes used"
 ```
+
+**Non-followers** (get_non_followers):
+```
+data[2]{id,username,name,followers,following,tweets,bio,pinned_tweet_id}:
+  "111222",inactive_acc,Some Account,12,5000,3,,null
+  "333444",spam_bot,Spammy,0,10000,50000,Follow me!,null
+meta:
+  total_following: 567
+  total_followers: 1234
+  non_followers_count: 2
+x_rate_limit: 14/15 (900s)
+x_budget: "0/8 replies used, 0/2 originals used, 0/20 likes used, 0/5 retweets used, 0/10 follows used, 0/10 unfollows used, 0/5 deletes used"
+```
+Sorted by follower count ascending. Summary fields in `meta` (not `result_count`/`next_token`).
 
 **Write result** (post_tweet, reply_to_tweet, quote_tweet):
 ```
@@ -486,7 +500,7 @@ MCP: {
   "next_task": {
     "workflow_id": "fc:charlie",
     "instruction": "Write a genuine, insightful reply to this tweet. Spark conversation, don't be generic.",
-    "context": { "tweet_id": "123", "tweet_text": "Hot take: MCP servers are the new APIs", "author": "@charlie" }
+    "context": { "tweet_id": "123", "tweet_text": "Hot take: MCP servers are the new APIs", "author": "@charlie", "author_followers": "98200" }
   },
   "x_budget": "2/8 replies used, 1/2 originals used, 5/20 likes used, ..."
 }

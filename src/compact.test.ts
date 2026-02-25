@@ -357,4 +357,46 @@ describe("compactResponse", () => {
     expect(data.author_followers).toBe(0);
     expect(data.author_follower_ratio).toBe(0);
   });
+
+  it("compacts non-followers response (raw API users + summary meta)", () => {
+    const response = {
+      data: [
+        { id: "1", username: "inactive", name: "Inactive", description: "gone", public_metrics: { followers_count: 12, following_count: 5000, tweet_count: 3 } },
+        { id: "2", username: "spambot", name: "Spam", description: "Follow me!", public_metrics: { followers_count: 0, following_count: 10000, tweet_count: 50000 } },
+      ],
+      meta: { total_following: 567, total_followers: 1234, non_followers_count: 2 },
+    };
+    const result = compactResponse(response) as Record<string, unknown>;
+    const data = result.data as Array<Record<string, unknown>>;
+    const meta = result.meta as Record<string, unknown>;
+
+    // Users are compacted properly — public_metrics resolved
+    expect(data).toHaveLength(2);
+    expect(data[0].username).toBe("inactive");
+    expect(data[0].followers).toBe(12);
+    expect(data[0].following).toBe(5000);
+    expect(data[0].tweets).toBe(3);
+    expect(data[0].bio).toBe("gone");
+    expect(data[1].followers).toBe(0);
+    expect(data[1].following).toBe(10000);
+
+    // Summary meta fields preserved
+    expect(meta.total_following).toBe(567);
+    expect(meta.total_followers).toBe(1234);
+    expect(meta.non_followers_count).toBe(2);
+  });
+});
+
+describe("compactUser — pinned_tweet_id", () => {
+  it("passes through pinned_tweet_id when present", () => {
+    const user = {
+      id: "456",
+      username: "pinned",
+      name: "Has Pinned",
+      pinned_tweet_id: "98765",
+      public_metrics: { followers_count: 100, following_count: 50, tweet_count: 200 },
+    };
+    const result = compactUser(user);
+    expect(result.pinned_tweet_id).toBe("98765");
+  });
 });

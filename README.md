@@ -237,14 +237,15 @@ x_budget: "0/8 replies used, 0/2 originals used, 0/20 likes used, 0/5 retweets u
 data[2]{id,username,name,followers,following,tweets,bio,pinned_tweet_id}:
   "111222",inactive_acc,Some Account,12,5000,3,,null
   "333444",spam_bot,Spammy,0,10000,50000,Follow me!,null
-total_following: 567
-total_followers: 1234
-non_followers_count: 2
+meta:
+  total_following: 567
+  total_followers: 1234
+  non_followers_count: 2
 x_rate_limit: 14/15 (900s)
 x_budget: "0/8 replies used, 0/2 originals used, 0/20 likes used, 0/5 retweets used, 0/10 follows used, 0/10 unfollows used, 0/5 deletes used"
 ```
 
-Sorted by follower count ascending (lowest quality first = best unfollow candidates).
+Sorted by follower count ascending (lowest quality first = best unfollow candidates). Summary fields (`total_following`, `total_followers`, `non_followers_count`) are in `meta`.
 
 ### post_tweet / reply_to_tweet / quote_tweet
 
@@ -346,7 +347,7 @@ If the LLM wanders off, nothing breaks. Workflows are persistent. Budgets preven
 |------|-------------|
 | `get_next_task` | Auto-processes all pending work, returns next LLM assignment |
 | `submit_task` | Submit LLM response (e.g. reply text), auto-continues workflow |
-| `start_workflow` | Begin a new follow_cycle or reply_track |
+| `start_workflow` | Begin a new follow_cycle or reply_track (`reply_tweet_id` required for reply_track) |
 | `get_workflow_status` | Show all workflows with steps, dates, outcomes |
 | `cleanup_non_followers` | Batch-unfollow non-followers (respects budget + protected accounts) |
 

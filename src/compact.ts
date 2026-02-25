@@ -110,10 +110,14 @@ export function compactUser(user: UserLike): CompactUser {
 function compactMeta(meta: unknown): Record<string, unknown> | undefined {
   if (!meta || typeof meta !== "object") return undefined;
   const m = meta as Record<string, unknown>;
-  // Keep result_count and next_token, drop redundant newest_id/oldest_id
+  // Keep useful fields, drop redundant newest_id/oldest_id
   const result: Record<string, unknown> = {};
   if (m.result_count !== undefined) result.result_count = m.result_count;
   if (m.next_token) result.next_token = m.next_token;
+  // Non-followers summary fields
+  if (m.total_following !== undefined) result.total_following = m.total_following;
+  if (m.total_followers !== undefined) result.total_followers = m.total_followers;
+  if (m.non_followers_count !== undefined) result.non_followers_count = m.non_followers_count;
   return Object.keys(result).length > 0 ? result : undefined;
 }
 

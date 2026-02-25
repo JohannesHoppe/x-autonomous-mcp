@@ -377,15 +377,15 @@ export class XApiClient {
   }
 
   async getNonFollowers(maxPages: number = 5): Promise<{
-    result: { data: Array<{ id: string; username: string; name: string; followers: number; following: number }>; total_following: number; total_followers: number; non_followers_count: number };
+    result: { data: Array<Record<string, unknown>>; meta: { total_following: number; total_followers: number; non_followers_count: number } };
     rateLimit: string;
   }> {
     const userId = await this.getAuthenticatedUserId();
     let lastRateLimit = "";
 
-    // Fetch all following (paginated)
+    // Fetch all following (paginated) — keep raw user objects for compactResponse
     const followingIds = new Set<string>();
-    const followingUsers = new Map<string, { id: string; username: string; name: string; followers: number; following: number }>();
+    const followingUsers = new Map<string, Record<string, unknown>>();
     let nextToken: string | undefined;
     for (let page = 0; page < maxPages; page++) {
       const { result, rateLimit } = await this.getFollowing(userId, 1000, nextToken);
@@ -394,15 +394,8 @@ export class XApiClient {
       if (resp.data) {
         for (const user of resp.data) {
           const id = user.id as string;
-          const metrics = user.public_metrics as { followers_count?: number; following_count?: number } | undefined;
           followingIds.add(id);
-          followingUsers.set(id, {
-            id,
-            username: (user.username as string) ?? "",
-            name: (user.name as string) ?? "",
-            followers: metrics?.followers_count ?? 0,
-            following: metrics?.following_count ?? 0,
-          });
+          followingUsers.set(id, user);
         }
       }
       nextToken = resp.meta?.next_token;
@@ -425,24 +418,29 @@ export class XApiClient {
       if (!nextToken) break;
     }
 
-    // Set difference: following but not follower
-    const nonFollowers: Array<{ id: string; username: string; name: string; followers: number; following: number }> = [];
+    // Set difference: following but not follower — keep raw user objects
+    const nonFollowers: Array<Record<string, unknown>> = [];
     for (const id of followingIds) {
       if (!followerIds.has(id)) {
-        const user = followingUsers.get(id)!;
-        nonFollowers.push(user);
+        nonFollowers.push(followingUsers.get(id)!);
       }
     }
 
     // Sort by follower count ascending (lowest quality first)
-    nonFollowers.sort((a, b) => a.followers - b.followers);
+    nonFollowers.sort((a, b) => {
+      const aMetrics = a.public_metrics as { followers_count?: number } | undefined;
+      const bMetrics = b.public_metrics as { followers_count?: number } | undefined;
+      return (aMetrics?.followers_count ?? 0) - (bMetrics?.followers_count ?? 0);
+    });
 
     return {
       result: {
         data: nonFollowers,
-        total_following: followingIds.size,
-        total_followers: followerIds.size,
-        non_followers_count: nonFollowers.length,
+        meta: {
+          total_following: followingIds.size,
+          total_followers: followerIds.size,
+          non_followers_count: nonFollowers.length,
+        },
       },
       rateLimit: lastRateLimit,
     };

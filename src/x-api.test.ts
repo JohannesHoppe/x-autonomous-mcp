@@ -305,12 +305,14 @@ describe("XApiClient", () => {
       const { result } = await client.getNonFollowers(1);
 
       // C and D are not in followers — should appear as non-followers
-      expect(result.non_followers_count).toBe(2);
-      expect(result.total_following).toBe(3);
-      expect(result.total_followers).toBe(2);
+      expect(result.meta.non_followers_count).toBe(2);
+      expect(result.meta.total_following).toBe(3);
+      expect(result.meta.total_followers).toBe(2);
       // Sorted by follower count ascending
       expect(result.data[0].id).toBe("C"); // 10 followers
       expect(result.data[1].id).toBe("D"); // 5000 followers
+      // Raw user objects preserved (public_metrics intact for compactResponse)
+      expect((result.data[0] as Record<string, unknown>).public_metrics).toBeDefined();
     });
   });
 });

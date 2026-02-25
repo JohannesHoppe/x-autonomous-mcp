@@ -125,6 +125,37 @@ describe("loadState", () => {
     expect(state.last_write_at).toBe(recentTimestamp);
   });
 
+  it("preserves workflows across day boundary (budget reset)", () => {
+    const recentDate = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(); // 2 days ago
+    fs.writeFileSync(filePath, JSON.stringify({
+      budget: { date: "2020-01-01", replies: 8, originals: 2, likes: 20, retweets: 5, follows: 5, unfollows: 3, deletes: 1 },
+      last_write_at: null,
+      engaged: { replied_to: [], liked: [], retweeted: [], quoted: [], followed: [] },
+      workflows: [{
+        id: "fc:alice",
+        type: "follow_cycle",
+        current_step: "waiting",
+        target_user_id: "100",
+        target_username: "alice",
+        created_at: recentDate,
+        check_after: "2026-03-01",
+        context: { pinned_tweet_id: "456" },
+        actions_done: ["followed", "liked_pinned"],
+        outcome: null,
+      }],
+    }));
+
+    const state = loadState(filePath);
+    // Budget should be reset
+    expect(state.budget.date).toBe(todayString());
+    expect(state.budget.replies).toBe(0);
+    expect(state.budget.follows).toBe(0);
+    // Workflows should be preserved
+    expect(state.workflows).toHaveLength(1);
+    expect(state.workflows[0].id).toBe("fc:alice");
+    expect(state.workflows[0].context.pinned_tweet_id).toBe("456");
+  });
+
   it("returns default state for corrupt JSON", () => {
     fs.writeFileSync(filePath, "not valid json {{{");
     const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});

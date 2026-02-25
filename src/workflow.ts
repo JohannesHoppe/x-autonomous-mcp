@@ -170,10 +170,7 @@ async function advanceFollowCycle(
   }
 
   if (step === "waiting") {
-    const today = new Date().toISOString().slice(0, 10);
-    if (workflow.check_after && workflow.check_after > today) {
-      return { llmNeeded: false, summary: null }; // Not ready yet, skip
-    }
+    // check_after is enforced by processWorkflows — if we're here, we're due
     workflow.current_step = "check_followback";
     return advanceFollowCycle(workflow, client, state, budgetConfig, protectedAccounts);
   }
@@ -281,11 +278,7 @@ async function advanceReplyTrack(
   }
 
   if (step === "waiting_audit") {
-    const now = Date.now();
-    const auditTime = new Date(workflow.created_at).getTime() + 48 * 60 * 60 * 1000;
-    if (now < auditTime) {
-      return { llmNeeded: false, summary: null }; // Not ready yet
-    }
+    // check_after is enforced by processWorkflows — if we're here, we're due
     workflow.current_step = "audit";
     return advanceReplyTrack(workflow, client, state, budgetConfig);
   }
@@ -352,8 +345,12 @@ export async function processWorkflows(
   let nextTask: LlmTask | null = null;
 
   // Process all workflows that have auto-steps pending
+  const today = new Date().toISOString().slice(0, 10);
   for (const workflow of state.workflows) {
     if (workflow.outcome) continue; // Skip completed workflows
+
+    // Skip workflows that aren't due yet (applies to all types)
+    if (workflow.check_after && workflow.check_after > today) continue;
 
     let result: { llmNeeded: boolean; summary: string | null };
 
@@ -528,10 +525,12 @@ export async function cleanupNonFollowers(
 
     for (const user of nonFollowers) {
       if (unfollowed.length >= maxUnfollow) break;
+      const username = (user.username as string) ?? "";
+      const userId = (user.id as string) ?? "";
 
       // Check protected accounts
-      if (isProtectedAccount(user.username, protectedAccounts)) {
-        skipped.push(`@${user.username} (protected)`);
+      if (isProtectedAccount(username, protectedAccounts)) {
+        skipped.push(`@${username} (protected)`);
         continue;
       }
 
@@ -543,11 +542,11 @@ export async function cleanupNonFollowers(
       }
 
       try {
-        await client.unfollowUser(user.id);
+        await client.unfollowUser(userId);
         recordAction("unfollow_user", null, state);
-        unfollowed.push(`@${user.username}`);
+        unfollowed.push(`@${username}`);
       } catch {
-        skipped.push(`@${user.username} (API error)`);
+        skipped.push(`@${username} (API error)`);
       }
     }
 

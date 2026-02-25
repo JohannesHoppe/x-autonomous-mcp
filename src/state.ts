@@ -123,7 +123,7 @@ function asWorkflowArray(value: unknown): Workflow[] {
     created_at: w.created_at,
     check_after: typeof w.check_after === "string" ? w.check_after : null,
     context: (w.context && typeof w.context === "object" && !Array.isArray(w.context))
-      ? w.context as Record<string, string>
+      ? Object.fromEntries(Object.entries(w.context).filter(([, v]) => typeof v === "string")) as Record<string, string>
       : {},
     actions_done: Array.isArray(w.actions_done) ? w.actions_done.filter((s: unknown) => typeof s === "string") : [],
     outcome: typeof w.outcome === "string" ? w.outcome : null,
