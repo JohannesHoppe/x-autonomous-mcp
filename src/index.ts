@@ -63,6 +63,25 @@ function formatWorkflowOutput(data: Record<string, unknown>): string {
   return toonEnabled ? encode(data) : JSON.stringify(data, null, 2);
 }
 
+/**
+ * Resolve protected account usernames to numeric IDs and add both to the set.
+ * One-time startup cost (1 API call per protected account). After this,
+ * isProtectedAccount matches both "friend1" and "12345" with a set lookup.
+ */
+async function resolveProtectedAccountIds(): Promise<void> {
+  if (protectedAccounts.size === 0) return;
+  for (const username of [...protectedAccounts]) {
+    try {
+      const userId = await client.resolveUserId(username);
+      if (userId && userId !== username) {
+        protectedAccounts.add(userId);
+      }
+    } catch {
+      // If resolution fails, username-based check still works
+    }
+  }
+}
+
 // --- MCP server ---
 
 const server = new McpServer({
@@ -493,23 +512,13 @@ server.registerTool(
   async (args) => {
     try {
       const userRef = args.user as string;
-      // Resolve username for protected account check (numeric IDs need resolution)
-      let username = userRef.replace(/^@/, "").toLowerCase();
-      if (/^\d+$/.test(userRef)) {
-        try {
-          const { result } = await client.getUser({ userId: userRef });
-          const data = result as { data?: { username?: string } };
-          if (data.data?.username) username = data.data.username.toLowerCase();
-        } catch {
-          // If getUser fails, proceed with numeric ID (protection check won't match, but unfollow may still work)
-        }
-      }
-      // Check protected accounts
-      if (isProtectedAccount(username, protectedAccounts)) {
+      // Protected accounts set contains both usernames and resolved numeric IDs
+      // (resolved once at startup by resolveProtectedAccountIds)
+      if (isProtectedAccount(userRef, protectedAccounts)) {
         const state = loadState(statePath);
         const budgetString = formatBudgetString(state, budgetConfig);
         return {
-          content: [{ type: "text" as const, text: `Error: @${username} is a protected account. Cannot unfollow.\n\nCurrent x_budget: ${budgetString}` }],
+          content: [{ type: "text" as const, text: `Error: @${userRef.replace(/^@/, "")} is a protected account. Cannot unfollow.\n\nCurrent x_budget: ${budgetString}` }],
           isError: true,
         };
       }
@@ -937,6 +946,7 @@ server.registerTool(
 // ============================================================
 
 async function main() {
+  await resolveProtectedAccountIds();
   const transport = new StdioServerTransport();
   await server.connect(transport);
 }
