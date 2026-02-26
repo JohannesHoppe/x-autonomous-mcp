@@ -415,7 +415,7 @@ describe("processWorkflows — follow_cycle", () => {
     expect(workflow.outcome).toBe("followed_back");
   });
 
-  it("protects accounts from cleanup", async () => {
+  it("protects accounts from cleanup by username", async () => {
     const workflow = makeWorkflow({
       current_step: "cleanup",
       context: { pinned_tweet_id: "pin123", reply_tweet_id: "reply789" },
@@ -424,6 +424,21 @@ describe("processWorkflows — follow_cycle", () => {
     const client = makeMockClient();
 
     await processWorkflows(state, client, makeConfig(), [{ username: "testuser", userId: "12345" }]);
+
+    expect(client.unfollowUser).not.toHaveBeenCalled();
+    expect(workflow.outcome).toBe("protected_kept");
+  });
+
+  it("protects accounts from cleanup by userId", async () => {
+    const workflow = makeWorkflow({
+      current_step: "cleanup",
+      context: { pinned_tweet_id: "pin123", reply_tweet_id: "reply789" },
+    });
+    const state = makeState({ workflows: [workflow] });
+    const client = makeMockClient();
+
+    // Username doesn't match, but userId does
+    await processWorkflows(state, client, makeConfig(), [{ username: "different_name", userId: "12345" }]);
 
     expect(client.unfollowUser).not.toHaveBeenCalled();
     expect(workflow.outcome).toBe("protected_kept");

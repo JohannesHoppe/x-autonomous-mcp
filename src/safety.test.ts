@@ -167,7 +167,7 @@ describe("checkBudget", () => {
 
   it("maps follow_user to follows budget", () => {
     const state = makeState({
-      budget: { date: "2026-02-23", replies: 0, originals: 0, likes: 0, retweets: 0, follows: 10 },
+      budget: { ...getDefaultState().budget, date: "2026-02-23", follows: 10 },
     });
     const result = checkBudget("follow_user", state, makeConfig());
     expect(result).toContain("limit reached");
@@ -175,7 +175,7 @@ describe("checkBudget", () => {
 
   it("returns null for follow_user under limit", () => {
     const state = makeState({
-      budget: { date: "2026-02-23", replies: 0, originals: 0, likes: 0, retweets: 0, follows: 3 },
+      budget: { ...getDefaultState().budget, date: "2026-02-23", follows: 3 },
     });
     expect(checkBudget("follow_user", state, makeConfig())).toBeNull();
   });

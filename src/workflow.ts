@@ -207,7 +207,7 @@ async function advanceFollowCycle(
 
   if (step === "cleanup") {
     // Check protected accounts
-    if (isProtectedAccount(workflow.target_username, protectedAccounts)) {
+    if (isProtectedAccount(workflow.target_username, protectedAccounts) || isProtectedAccount(workflow.target_user_id, protectedAccounts)) {
       workflow.outcome = "protected_kept";
       workflow.current_step = "done";
       return { llmNeeded: false, summary: `@${workflow.target_username} is protected — kept follow, skipped cleanup.` };
@@ -373,7 +373,7 @@ export async function processWorkflows(
 
   // Build status
   const active = state.workflows.filter((w) => !w.outcome);
-  const waiting = active.filter((w) => w.check_after && w.check_after > new Date().toISOString().slice(0, 10));
+  const waiting = active.filter((w) => w.check_after && w.check_after > today);
   const earliestCheck = waiting.length > 0
     ? waiting.reduce((earliest, w) => w.check_after! < earliest ? w.check_after! : earliest, waiting[0].check_after!)
     : null;

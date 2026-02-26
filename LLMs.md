@@ -528,7 +528,7 @@ Mass unfollow (>100/day) = 3-month shadowban
 
 - **Self-Quote Boost:** `post_tweet` → 60s → `reply_to_tweet` (link) → 4-6h → `quote_tweet`
 - **Pre-Engagement Warm-Up:** Like 5-10 + reply to 3-5 niche posts → then post your content
-- **Non-Follower Cleanup:** `cleanup_non_followers` periodically, keep ratio < 0.6
+- **Non-Follower Cleanup:** `cleanup_non_followers` periodically, keep following/follower ratio below 0.6
 - **List Targeting:** `get_followed_lists` → `get_list_members` → `start_workflow` for best candidates
 
 ---

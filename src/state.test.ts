@@ -73,7 +73,7 @@ describe("loadState", () => {
   });
 
   it("loads valid state file", () => {
-    const existing: StateFile = {
+    const existing = {
       budget: { date: todayString(), replies: 3, originals: 1, likes: 5, retweets: 2 },
       last_write_at: "2026-02-23T10:00:00.000Z",
       engaged: {
@@ -97,7 +97,7 @@ describe("loadState", () => {
     // Use yesterday's date for budget (triggers reset) but recent timestamps
     // for engaged entries (within 90-day pruning window)
     const recentTimestamp = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(); // yesterday
-    const existing: StateFile = {
+    const existing = {
       budget: { date: "2020-01-01", replies: 8, originals: 2, likes: 20, retweets: 5 },
       last_write_at: recentTimestamp,
       engaged: {
