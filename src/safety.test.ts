@@ -7,8 +7,9 @@ import {
   recordAction,
   getParameterHint,
   isWriteTool,
+  isProtectedAccount,
 } from "./safety.js";
-import type { BudgetConfig } from "./safety.js";
+import type { BudgetConfig, ProtectedAccount } from "./safety.js";
 import { getDefaultState } from "./state.js";
 import type { StateFile } from "./state.js";
 
@@ -61,7 +62,7 @@ describe("formatBudgetString", () => {
 
   it("shows LIMIT REACHED for exhausted counters", () => {
     const state = makeState({
-      budget: { date: "2026-02-23", replies: 8, originals: 2, likes: 20, retweets: 5 },
+      budget: { ...getDefaultState().budget, date: "2026-02-23", replies: 8, originals: 2, likes: 20, retweets: 5 },
     });
     const result = formatBudgetString(state, makeConfig());
     expect(result).toContain("8/8 replies used (LIMIT REACHED)");
@@ -70,7 +71,7 @@ describe("formatBudgetString", () => {
 
   it("shows unlimited for -1 limits", () => {
     const state = makeState({
-      budget: { date: "2026-02-23", replies: 3, originals: 0, likes: 0, retweets: 0 },
+      budget: { ...getDefaultState().budget, date: "2026-02-23", replies: 3, originals: 0, likes: 0, retweets: 0 },
     });
     const result = formatBudgetString(state, makeConfig({ maxReplies: -1 }));
     expect(result).toContain("3/unlimited replies used");
@@ -78,7 +79,7 @@ describe("formatBudgetString", () => {
 
   it("shows DISABLED for 0 limits", () => {
     const state = makeState({
-      budget: { date: "2026-02-23", replies: 0, originals: 0, likes: 0, retweets: 0 },
+      budget: { ...getDefaultState().budget, date: "2026-02-23", replies: 0, originals: 0, likes: 0, retweets: 0 },
     });
     const result = formatBudgetString(state, makeConfig({ maxLikes: 0 }));
     expect(result).toContain("0/0 likes used (DISABLED)");
@@ -107,14 +108,14 @@ describe("checkBudget", () => {
 
   it("returns null when under limit", () => {
     const state = makeState({
-      budget: { date: "2026-02-23", replies: 3, originals: 0, likes: 0, retweets: 0 },
+      budget: { ...getDefaultState().budget, date: "2026-02-23", replies: 3, originals: 0, likes: 0, retweets: 0 },
     });
     expect(checkBudget("reply_to_tweet", state, makeConfig())).toBeNull();
   });
 
   it("returns error when at limit", () => {
     const state = makeState({
-      budget: { date: "2026-02-23", replies: 8, originals: 0, likes: 0, retweets: 0 },
+      budget: { ...getDefaultState().budget, date: "2026-02-23", replies: 8, originals: 0, likes: 0, retweets: 0 },
     });
     const result = checkBudget("reply_to_tweet", state, makeConfig());
     expect(result).toContain("limit reached");
@@ -131,14 +132,14 @@ describe("checkBudget", () => {
 
   it("returns null for unlimited action (max=-1)", () => {
     const state = makeState({
-      budget: { date: "2026-02-23", replies: 999, originals: 0, likes: 0, retweets: 0 },
+      budget: { ...getDefaultState().budget, date: "2026-02-23", replies: 999, originals: 0, likes: 0, retweets: 0 },
     });
     expect(checkBudget("reply_to_tweet", state, makeConfig({ maxReplies: -1 }))).toBeNull();
   });
 
   it("maps post_tweet to originals budget", () => {
     const state = makeState({
-      budget: { date: "2026-02-23", replies: 0, originals: 2, likes: 0, retweets: 0 },
+      budget: { ...getDefaultState().budget, date: "2026-02-23", replies: 0, originals: 2, likes: 0, retweets: 0 },
     });
     const result = checkBudget("post_tweet", state, makeConfig());
     expect(result).toContain("limit reached");
@@ -146,7 +147,7 @@ describe("checkBudget", () => {
 
   it("maps quote_tweet to originals budget", () => {
     const state = makeState({
-      budget: { date: "2026-02-23", replies: 0, originals: 2, likes: 0, retweets: 0 },
+      budget: { ...getDefaultState().budget, date: "2026-02-23", replies: 0, originals: 2, likes: 0, retweets: 0 },
     });
     const result = checkBudget("quote_tweet", state, makeConfig());
     expect(result).toContain("limit reached");
@@ -251,7 +252,7 @@ describe("checkDedup", () => {
       },
     });
     const result = checkDedup("follow_user", "user123", state);
-    expect(result).toContain("Already followed tweet user123");
+    expect(result).toContain("Already followed user user123");
     expect(result).toContain("Duplicate blocked");
   });
 
@@ -457,5 +458,43 @@ describe("isWriteTool", () => {
 
   it("returns false for unknown tools", () => {
     expect(isWriteTool("nonexistent_tool")).toBe(false);
+  });
+});
+
+describe("isProtectedAccount", () => {
+  const accounts: ProtectedAccount[] = [
+    { username: "friend1", userId: "111" },
+    { username: "mentor", userId: "222" },
+    { username: "unresolved", userId: null },
+  ];
+
+  it("matches by username", () => {
+    expect(isProtectedAccount("friend1", accounts)).toBe(true);
+  });
+
+  it("matches by username with @ prefix", () => {
+    expect(isProtectedAccount("@friend1", accounts)).toBe(true);
+  });
+
+  it("matches case-insensitively", () => {
+    expect(isProtectedAccount("Friend1", accounts)).toBe(true);
+    expect(isProtectedAccount("MENTOR", accounts)).toBe(true);
+  });
+
+  it("matches by numeric userId", () => {
+    expect(isProtectedAccount("111", accounts)).toBe(true);
+    expect(isProtectedAccount("222", accounts)).toBe(true);
+  });
+
+  it("returns false for unresolved userId (null)", () => {
+    // "unresolved" matches by username, not userId
+    expect(isProtectedAccount("unresolved", accounts)).toBe(true);
+    // Some random ID that doesn't match any userId
+    expect(isProtectedAccount("999", accounts)).toBe(false);
+  });
+
+  it("returns false for non-protected accounts", () => {
+    expect(isProtectedAccount("stranger", accounts)).toBe(false);
+    expect(isProtectedAccount("333", accounts)).toBe(false);
   });
 });

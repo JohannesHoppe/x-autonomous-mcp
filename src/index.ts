@@ -734,7 +734,7 @@ server.registerTool(
   async (args) => {
     try {
       const state = loadState(statePath);
-      const { error, workflow } = submitTaskResponse(
+      const { error } = submitTaskResponse(
         state,
         args.workflow_id as string,
         args.response as Record<string, string>,

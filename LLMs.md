@@ -518,7 +518,7 @@ MCP: { "next_task": null, "status": "No tasks pending. 5 workflows waiting (earl
 ```
 Reply with follow-up = +75x | Reply = +13.5x | Retweet = +1x | Like = +0.5x
 External links = -50% to -90% reach → put links in self-reply
-Following/follower ratio > 0.6 = hard algorithmic penalty
+Following/follower ratio > 0.6 = hard algorithmic penalty (your author_follower_ratio should stay above ~1.7)
 First 30 minutes = algorithm's test window
 Self-quote 4-6h later restarts engagement clock
 Mass unfollow (>100/day) = 3-month shadowban

@@ -475,7 +475,7 @@ describe("processWorkflows — follow_cycle", () => {
       getUser: vi.fn().mockRejectedValue(new Error("getUser API error")),
     });
 
-    const result = await processWorkflows(state, client, makeConfig(), []);
+    await processWorkflows(state, client, makeConfig(), []);
 
     expect(client.followUser).toHaveBeenCalled();
     expect(workflow.actions_done).toContain("followed");
@@ -490,7 +490,7 @@ describe("processWorkflows — follow_cycle", () => {
       likeTweet: vi.fn().mockRejectedValue(new Error("like API error")),
     });
 
-    const result = await processWorkflows(state, client, makeConfig(), []);
+    await processWorkflows(state, client, makeConfig(), []);
 
     expect(workflow.actions_done).toContain("followed");
     expect(workflow.actions_done).not.toContain("liked_pinned");
@@ -701,6 +701,18 @@ describe("cleanupNonFollowers", () => {
     const state = makeState();
     const client = makeMockClient();
     const protectedSet = [{ username: "protecteduser", userId: "nf3" }];
+
+    const result = await cleanupNonFollowers(client, state, makeConfig(), protectedSet, 10, 5);
+
+    expect(result.unfollowed).toEqual(["@nonfollower1", "@nonfollower2"]);
+    expect(result.skipped).toContain("@protecteduser (protected)");
+  });
+
+  it("skips protected accounts matched by userId", async () => {
+    const state = makeState();
+    const client = makeMockClient();
+    // Only userId matches — username in protected list doesn't match "protecteduser"
+    const protectedSet = [{ username: "different_name", userId: "nf3" }];
 
     const result = await cleanupNonFollowers(client, state, makeConfig(), protectedSet, 10, 5);
 

@@ -528,8 +528,8 @@ export async function cleanupNonFollowers(
       const username = (user.username as string) ?? "";
       const userId = (user.id as string) ?? "";
 
-      // Check protected accounts
-      if (isProtectedAccount(username, protectedAccounts)) {
+      // Check protected accounts (by username or numeric userId)
+      if (isProtectedAccount(username, protectedAccounts) || isProtectedAccount(userId, protectedAccounts)) {
         skipped.push(`@${username} (protected)`);
         continue;
       }

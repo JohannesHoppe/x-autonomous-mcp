@@ -240,7 +240,7 @@ export class XApiClient {
     const params = new URLSearchParams({
       query,
       max_results: fetchCount.toString(),
-      "tweet.fields": "created_at,public_metrics,author_id,conversation_id,entities,lang,note_tweet",
+      "tweet.fields": "created_at,public_metrics,author_id,conversation_id,referenced_tweets,entities,lang,note_tweet",
       expansions: "author_id",
       "user.fields": "name,username,verified,public_metrics",
     });
@@ -306,7 +306,7 @@ export class XApiClient {
   async getTimeline(userId: string, maxResults: number = 10, nextToken?: string) {
     const params = new URLSearchParams({
       max_results: Math.min(Math.max(maxResults, 5), 100).toString(),
-      "tweet.fields": "created_at,public_metrics,author_id,conversation_id,entities,lang,note_tweet",
+      "tweet.fields": "created_at,public_metrics,author_id,conversation_id,referenced_tweets,entities,lang,note_tweet",
       expansions: "author_id",
       "user.fields": "name,username,verified,public_metrics",
     });
@@ -321,7 +321,7 @@ export class XApiClient {
     const userId = await this.getAuthenticatedUserId();
     const params = new URLSearchParams({
       max_results: Math.min(Math.max(maxResults, 5), 100).toString(),
-      "tweet.fields": "created_at,public_metrics,author_id,conversation_id,entities,lang,note_tweet",
+      "tweet.fields": "created_at,public_metrics,author_id,conversation_id,referenced_tweets,entities,lang,note_tweet",
       expansions: "author_id",
       "user.fields": "name,username,verified,public_metrics",
     });
@@ -578,7 +578,7 @@ export class XApiClient {
   async getListTweets(listId: string, maxResults: number = 100, nextToken?: string) {
     const params = new URLSearchParams({
       max_results: Math.min(Math.max(maxResults, 1), 100).toString(),
-      "tweet.fields": "created_at,public_metrics,author_id,conversation_id,entities,lang,note_tweet",
+      "tweet.fields": "created_at,public_metrics,author_id,conversation_id,referenced_tweets,entities,lang,note_tweet",
       expansions: "author_id",
       "user.fields": "name,username,verified,public_metrics",
     });

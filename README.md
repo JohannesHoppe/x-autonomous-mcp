@@ -621,7 +621,7 @@ Every response includes rate limit info: remaining requests, total limit, and re
 
 ## Pagination
 
-List endpoints return a `next_token` in the response. Pass it back to get the next page of results. Works on: `search_tweets`, `get_timeline`, `get_mentions`, `get_followers`, `get_following`.
+List endpoints return a `next_token` in the response. Pass it back to get the next page of results. Works on: `search_tweets`, `get_timeline`, `get_mentions`, `get_followers`, `get_following`, `get_list_members`, `get_list_tweets`, `get_followed_lists`.
 
 ## Search Query Syntax
 

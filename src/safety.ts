@@ -196,7 +196,8 @@ export function checkDedup(
   const entries: EngagedEntry[] = state.engaged[dedupType];
   const existing = entries.find((e) => e.tweet_id === targetTweetId);
   if (existing) {
-    return `Already ${dedupType.replace("_", " ")} tweet ${targetTweetId} at ${existing.at}. Duplicate blocked.`;
+    const noun = dedupType === "followed" ? "user" : "tweet";
+    return `Already ${dedupType.replace("_", " ")} ${noun} ${targetTweetId} at ${existing.at}. Duplicate blocked.`;
   }
 
   return null;
