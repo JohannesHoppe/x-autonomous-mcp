@@ -256,14 +256,15 @@ MCP (internally):
 
 MCP responds:
   {
-    "auto_completed": [],
+    "result": "Workflow follow_cycle started for @alice.",
     "next_task": {
       "workflow_id": "fc:alice",
       "instruction": "Write a genuine, insightful reply to this tweet...",
       "context": { "tweet_id": "t1", "tweet_text": "Hot take: MCP is underrated", "author": "@alice", "author_followers": "5000" },
       "respond_with": "submit_task"
     },
-    "status": "1 active workflows. Task ready."
+    "status": "1 active workflows. Task ready.",
+    "x_budget": "1/10 follows used, 1/20 likes used, ..."
   }
 
 Bot: submit_task(workflow_id="fc:alice", response={ reply_text: "100% — composability is the killer feature" })
@@ -280,9 +281,10 @@ MCP (internally):
 
 MCP responds:
   {
-    "auto_completed": ["Follow cycle for @alice: reply posted. Check-back scheduled for 2026-03-03."],
-    "next_task": null,
-    "status": "No tasks pending. 1 workflows waiting (earliest check-back: 2026-03-03)."
+    "result": "Task submitted for workflow fc:alice.",
+    "auto_completed": "Follow cycle for @alice: reply posted. Check-back scheduled for 2026-03-03.",
+    "status": "No tasks pending. 1 workflows waiting (earliest check-back: 2026-03-03).",
+    "x_budget": "1/10 follows used, 1/20 likes used, 1/8 replies used, ..."
   }
 
 
@@ -300,9 +302,9 @@ MCP (internally):
 
 MCP responds:
   {
-    "auto_completed": ["@alice followed back!"],
-    "next_task": null,
-    "status": "No active workflows."
+    "auto_completed": "@alice followed back!",
+    "status": "No active workflows.",
+    "x_budget": "1/10 follows used, 1/20 likes used, 1/8 replies used, ..."
   }
 ```
 
@@ -329,9 +331,9 @@ MCP (internally):
 
 MCP responds:
   {
-    "auto_completed": ["@bob cleaned up (unliked_pinned, deleted_reply, unfollowed)."],
-    "next_task": null,
-    "status": "No active workflows."
+    "auto_completed": "@bob cleaned up (unliked_pinned, deleted_reply, unfollowed).",
+    "status": "No active workflows.",
+    "x_budget": "0/10 follows used, 0/20 likes used, 0/8 replies used, 1/5 deletes used, 1/10 unfollows used, ..."
   }
 ```
 

@@ -2,7 +2,7 @@
 
 ## Overview
 
-Unlike `follow_cycle` and `reply_track`, `cleanup_non_followers` is a **one-shot operation**, not a persistent workflow. It runs to completion in a single `get_next_task` or direct tool call — there's no state machine, no waiting period, no multi-session tracking. It finds accounts you follow that don't follow you back, and batch-unfollows them.
+Unlike `follow_cycle` and `reply_track`, `cleanup_non_followers` is a **one-shot operation**, not a persistent workflow. It runs to completion in a single direct tool call — there's no state machine, no waiting period, no multi-session tracking. It is NOT triggered by `get_next_task` (which only processes `follow_cycle` and `reply_track` workflows). It finds accounts you follow that don't follow you back, and batch-unfollows them.
 
 The purpose is to manage your following/follower ratio. X's algorithm penalizes accounts with a following/follower ratio above 0.6 (i.e., you follow more than 60% as many people as follow you). Periodic cleanup keeps this ratio healthy.
 
@@ -137,6 +137,7 @@ MCP responds:
   {
     "unfollowed": [],
     "skipped": [],
+    "x_budget": "0/8 replies used, 0/2 originals used, ...",
     "error": "API down"
   }
 ```

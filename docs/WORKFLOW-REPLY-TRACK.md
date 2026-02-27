@@ -131,9 +131,9 @@ MCP (internally):
 
 MCP responds:
   {
-    "auto_completed": [],
-    "next_task": null,
-    "status": "No tasks pending. 1 workflows waiting (earliest check-back: 2026-02-28)."
+    "result": "Workflow reply_track started for @alice.",
+    "status": "No tasks pending. 1 workflows waiting (earliest check-back: 2026-02-28).",
+    "x_budget": "0/8 replies used, 0/2 originals used, ..."
   }
 
 
@@ -153,9 +153,9 @@ MCP (internally):
 
 MCP responds:
   {
-    "auto_completed": ["Reply reply123 audited: 3 likes, 1 replies, 450 impressions — kept."],
-    "next_task": null,
-    "status": "No active workflows."
+    "auto_completed": "Reply reply123 audited: 3 likes, 1 replies, 450 impressions — kept.",
+    "status": "No active workflows.",
+    "x_budget": "0/8 replies used, 0/2 originals used, ..."
   }
 ```
 
@@ -182,9 +182,9 @@ MCP (internally):
 
 MCP responds:
   {
-    "auto_completed": ["Reply reply456 deleted (0 likes, 0 replies after 48h)."],
-    "next_task": null,
-    "status": "No active workflows."
+    "auto_completed": "Reply reply456 deleted (0 likes, 0 replies after 48h).",
+    "status": "No active workflows.",
+    "x_budget": "0/8 replies used, 0/2 originals used, 1/5 deletes used, ..."
   }
 ```
 
