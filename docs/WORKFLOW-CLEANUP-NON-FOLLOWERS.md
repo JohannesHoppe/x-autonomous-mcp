@@ -65,7 +65,7 @@ MCP responds:
   {
     "unfollowed": ["@inactive_acc", "@spambot", "@random_person", "@abandoned_account"],
     "skipped": ["@old_friend (protected)"],
-    "summary": "Unfollowed 4 non-followers, skipped 1."
+    "x_budget": "0/8 replies used, 0/2 originals used, ..."
   }
 ```
 
@@ -85,7 +85,7 @@ MCP responds:
   {
     "unfollowed": ["@stranger"],
     "skipped": ["@mentor (protected)", "@friend1 (protected)"],
-    "summary": "Unfollowed 1 non-followers, skipped 2."
+    "x_budget": "0/8 replies used, 0/2 originals used, ..."
   }
 ```
 
@@ -104,7 +104,7 @@ MCP responds:
   {
     "unfollowed": ["@first_user"],
     "skipped": ["budget exhausted — stopped"],
-    "summary": "Unfollowed 1 non-followers, skipped 1."
+    "x_budget": "0/8 replies used, 0/2 originals used, ..."
   }
 ```
 
@@ -121,7 +121,7 @@ MCP responds:
   {
     "unfollowed": ["@user_a", "@user_c"],
     "skipped": ["@user_b (API error)"],
-    "summary": "Unfollowed 2 non-followers, skipped 1."
+    "x_budget": "0/8 replies used, 0/2 originals used, ..."
   }
 ```
 

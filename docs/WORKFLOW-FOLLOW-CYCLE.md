@@ -69,7 +69,7 @@ execute_follow ─────────┤
 
 ### Step 1: execute_follow (AUTO)
 
-The MCP follows the target, fetches their profile, likes their pinned tweet, and pulls their timeline.
+The MCP follows the target, fetches their profile, and likes their pinned tweet.
 
 **Pre-checks (any failure aborts or blocks):**
 - Follow budget (`X_MCP_MAX_FOLLOWS`, default 10/day). If exhausted: workflow is NOT advanced. A summary is returned. The workflow retries on the next `get_next_task` call.
@@ -233,10 +233,14 @@ Terminal state. The workflow is complete. It will be pruned from state after 30 
 Day 1, Session 1
 ─────────────────
 
-Bot: get_next_task()
+Bot: start_workflow(type="follow_cycle", target="alice")
 
 MCP (internally):
-  → Finds fc:alice at execute_follow
+  → Resolves "alice" → userId "123456"
+  → Creates workflow: id = "fc:alice", current_step = "execute_follow"
+  → processWorkflows() runs immediately:
+
+  → fc:alice at execute_follow
   → checkBudget("follow_user") → OK (1/10)
   → checkDedup("follow_user", "123456") → OK (first time)
   → client.followUser("123456") → success
