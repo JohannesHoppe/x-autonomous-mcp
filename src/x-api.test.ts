@@ -271,6 +271,98 @@ describe("XApiClient", () => {
     });
   });
 
+  describe("unlikeTweet", () => {
+    it("sends DELETE to likes endpoint", async () => {
+      const fetchMock = vi.fn()
+        .mockResolvedValueOnce({
+          ok: true, status: 200, headers: new Headers(),
+          text: () => Promise.resolve(JSON.stringify({ data: { id: "me123" } })),
+        })
+        .mockResolvedValueOnce({
+          ok: true, status: 200, headers: new Headers(),
+          text: () => Promise.resolve(JSON.stringify({ data: { liked: false } })),
+        });
+      vi.stubGlobal("fetch", fetchMock);
+
+      const client = makeClient();
+      await client.unlikeTweet("tweet999");
+
+      const call = fetchMock.mock.calls[1];
+      expect(call[0]).toContain("/users/me123/likes/tweet999");
+      expect(call[1]?.method).toBe("DELETE");
+    });
+  });
+
+  describe("unretweet", () => {
+    it("sends DELETE to retweets endpoint", async () => {
+      const fetchMock = vi.fn()
+        .mockResolvedValueOnce({
+          ok: true, status: 200, headers: new Headers(),
+          text: () => Promise.resolve(JSON.stringify({ data: { id: "me123" } })),
+        })
+        .mockResolvedValueOnce({
+          ok: true, status: 200, headers: new Headers(),
+          text: () => Promise.resolve(JSON.stringify({ data: { retweeted: false } })),
+        });
+      vi.stubGlobal("fetch", fetchMock);
+
+      const client = makeClient();
+      await client.unretweet("tweet888");
+
+      const call = fetchMock.mock.calls[1];
+      expect(call[0]).toContain("/users/me123/retweets/tweet888");
+      expect(call[1]?.method).toBe("DELETE");
+    });
+  });
+
+  describe("getListMembers", () => {
+    it("fetches list members with bearer token", async () => {
+      mockFetchResponse({ data: [{ id: "1", username: "a" }], meta: { result_count: 1 } });
+      const client = makeClient();
+      await client.getListMembers("list123");
+
+      const url = vi.mocked(fetch).mock.calls[0][0] as string;
+      expect(url).toContain("/lists/list123/members");
+      expect(url).toContain("pinned_tweet_id");
+      const headers = vi.mocked(fetch).mock.calls[0][1]?.headers as Record<string, string>;
+      expect(headers["Authorization"]).toBe("Bearer test-bearer");
+    });
+  });
+
+  describe("getListTweets", () => {
+    it("fetches list tweets with author expansion", async () => {
+      mockFetchResponse({ data: [{ id: "t1", text: "hello" }], meta: { result_count: 1 } });
+      const client = makeClient();
+      await client.getListTweets("list456");
+
+      const url = vi.mocked(fetch).mock.calls[0][0] as string;
+      expect(url).toContain("/lists/list456/tweets");
+      expect(url).toContain("expansions=author_id");
+      expect(url).toContain("referenced_tweets");
+    });
+  });
+
+  describe("getFollowedLists", () => {
+    it("fetches followed lists for authenticated user", async () => {
+      const fetchMock = vi.fn()
+        .mockResolvedValueOnce({
+          ok: true, status: 200, headers: new Headers(),
+          text: () => Promise.resolve(JSON.stringify({ data: { id: "me123" } })),
+        })
+        .mockResolvedValueOnce({
+          ok: true, status: 200, headers: new Headers(),
+          text: () => Promise.resolve(JSON.stringify({ data: [{ id: "list1", name: "My List" }] })),
+        });
+      vi.stubGlobal("fetch", fetchMock);
+
+      const client = makeClient();
+      await client.getFollowedLists();
+
+      const url = fetchMock.mock.calls[1][0] as string;
+      expect(url).toContain("/users/me123/followed_lists");
+    });
+  });
+
   describe("getNonFollowers", () => {
     it("computes set difference of following vs followers", async () => {
       let callIndex = 0;

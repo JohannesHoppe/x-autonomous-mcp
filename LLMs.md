@@ -468,7 +468,7 @@ If you get distracted, just call `get_next_task` — it picks up where you left 
 
 ### Available Workflow Types
 
-- **follow_cycle**: Follow → like pinned → reply → wait 7d → check follow-back → cleanup
+- **follow_cycle**: Follow → like pinned → reply → wait 7d → check follow-back → cleanup. Note: follow-back check scans up to 5000 of the target's following list — if the target follows >5000 people, followback may go undetected.
 - **reply_track**: Track a reply for performance audit after 48h → keep or delete
 
 ### Workflow Tools

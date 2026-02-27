@@ -181,6 +181,8 @@ async function advanceFollowCycle(
       // Check if target follows us by paginating through the target's following list.
       // This is more reliable than checking our followers (which could be >1000 pages).
       // The target likely follows far fewer people than we have followers.
+      // Limitation: scans max 5 pages (5000 users). If the target follows >5000 people,
+      // followback may go undetected and trigger a false cleanup.
       let nextToken: string | undefined;
       const MAX_PAGES = 5;
       for (let page = 0; page < MAX_PAGES; page++) {
@@ -249,9 +251,10 @@ async function advanceFollowCycle(
       }
     }
 
-    workflow.outcome = "cleaned_up";
+    const cleanupActions = workflow.actions_done.filter((a) => a.startsWith("unliked") || a.startsWith("deleted") || a.startsWith("unfollowed"));
+    workflow.outcome = cleanupActions.includes("unfollowed") ? "cleaned_up" : "partially_cleaned_up";
     workflow.current_step = "done";
-    return { llmNeeded: false, summary: `@${workflow.target_username} cleaned up (${workflow.actions_done.filter((a) => a.startsWith("unliked") || a.startsWith("deleted") || a.startsWith("unfollowed")).join(", ")}).` };
+    return { llmNeeded: false, summary: `@${workflow.target_username} cleaned up (${cleanupActions.join(", ")}).` };
   }
 
   // "done" or unknown step

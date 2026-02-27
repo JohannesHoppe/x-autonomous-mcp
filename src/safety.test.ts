@@ -155,7 +155,7 @@ describe("checkBudget", () => {
 
   it("returns error for delete_tweet when at limit", () => {
     const state = makeState({
-      budget: { date: "2026-02-23", replies: 0, originals: 0, likes: 0, retweets: 0, follows: 0, unfollows: 0, deletes: 5 },
+      budget: { ...getDefaultState().budget, date: "2026-02-23", deletes: 5 },
     });
     const result = checkBudget("delete_tweet", state, makeConfig());
     expect(result).toContain("limit reached");
@@ -182,7 +182,7 @@ describe("checkBudget", () => {
 
   it("returns error for unfollow_user when at limit", () => {
     const state = makeState({
-      budget: { date: "2026-02-23", replies: 0, originals: 0, likes: 0, retweets: 0, follows: 0, unfollows: 10, deletes: 0 },
+      budget: { ...getDefaultState().budget, date: "2026-02-23", unfollows: 10 },
     });
     const result = checkBudget("unfollow_user", state, makeConfig());
     expect(result).toContain("limit reached");

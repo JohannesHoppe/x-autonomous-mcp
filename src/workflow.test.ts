@@ -544,6 +544,28 @@ describe("processWorkflows — follow_cycle", () => {
     expect(workflow.actions_done).toContain("unfollowed");
   });
 
+  it("sets partially_cleaned_up when unfollow budget exhausted", async () => {
+    const workflow = makeWorkflow({
+      current_step: "cleanup",
+      context: { pinned_tweet_id: "pin123", reply_tweet_id: "reply789" },
+    });
+    const state = makeState({
+      workflows: [workflow],
+      budget: { ...getDefaultState().budget, unfollows: 10 },
+    });
+    const client = makeMockClient();
+
+    await processWorkflows(state, client, makeConfig(), []);
+
+    expect(client.unlikeTweet).toHaveBeenCalledWith("pin123");
+    expect(client.deleteTweet).toHaveBeenCalledWith("reply789");
+    expect(client.unfollowUser).not.toHaveBeenCalled();
+    expect(workflow.outcome).toBe("partially_cleaned_up");
+    expect(workflow.actions_done).toContain("unliked_pinned");
+    expect(workflow.actions_done).toContain("deleted_reply");
+    expect(workflow.actions_done).not.toContain("unfollowed");
+  });
+
   it("skips reply when reply budget is exhausted", async () => {
     const workflow = makeWorkflow({
       current_step: "post_reply",
