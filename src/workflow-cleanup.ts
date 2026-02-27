@@ -4,6 +4,17 @@ import { checkBudget, recordAction, isProtectedAccount } from "./safety.js";
 
 // --- Cleanup Non-Followers (one-shot operation) ---
 
+/** Collect user IDs targeted by active workflows (follow_cycle + reply_track). */
+function getActiveWorkflowTargets(state: StateFile): Set<string> {
+  const targets = new Set<string>();
+  for (const w of state.workflows) {
+    if (!w.outcome && w.target_user_id) {
+      targets.add(w.target_user_id);
+    }
+  }
+  return targets;
+}
+
 export async function cleanupNonFollowers(
   client: XApiClient,
   state: StateFile,
@@ -14,6 +25,7 @@ export async function cleanupNonFollowers(
 ): Promise<{ unfollowed: string[]; skipped: string[]; error: string | null }> {
   const unfollowed: string[] = [];
   const skipped: string[] = [];
+  const activeTargets = getActiveWorkflowTargets(state);
 
   try {
     const { result } = await client.getNonFollowers(maxPages);
@@ -23,6 +35,12 @@ export async function cleanupNonFollowers(
       if (unfollowed.length >= maxUnfollow) break;
       const username = (user.username as string) ?? "";
       const userId = (user.id as string) ?? "";
+
+      // Skip users targeted by active workflows (follow_cycle or reply_track)
+      if (activeTargets.has(userId)) {
+        skipped.push(`@${username} (active workflow)`);
+        continue;
+      }
 
       // Check protected accounts (by username or numeric userId)
       if (isProtectedAccount(username, protectedAccounts) || isProtectedAccount(userId, protectedAccounts)) {

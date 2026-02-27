@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { cleanupNonFollowers } from "./workflow.js";
 import { getDefaultState } from "./state.js";
-import type { StateFile } from "./state.js";
+import type { StateFile, Workflow } from "./state.js";
 import type { BudgetConfig } from "./safety.js";
 import type { XApiClient } from "./x-api.js";
 
@@ -20,6 +20,22 @@ function makeConfig(overrides?: Partial<BudgetConfig>): BudgetConfig {
 
 function makeState(overrides?: Partial<StateFile>): StateFile {
   return { ...getDefaultState(), ...overrides };
+}
+
+function makeWorkflow(overrides?: Partial<Workflow>): Workflow {
+  return {
+    id: "fc:testuser",
+    type: "follow_cycle",
+    current_step: "waiting",
+    target_user_id: "12345",
+    target_username: "testuser",
+    created_at: new Date().toISOString(),
+    check_after: null,
+    context: {},
+    actions_done: [],
+    outcome: null,
+    ...overrides,
+  };
 }
 
 function makeMockClient(overrides?: Partial<Record<string, unknown>>): XApiClient {
@@ -139,6 +155,42 @@ describe("cleanupNonFollowers", () => {
 
     expect(result.error).toContain("API down");
     expect(result.unfollowed).toEqual([]);
+  });
+
+  it("skips users targeted by active follow_cycle workflow", async () => {
+    const state = makeState({
+      workflows: [makeWorkflow({ id: "fc:nonfollower2", target_user_id: "nf2", target_username: "nonfollower2" })],
+    });
+    const client = makeMockClient();
+
+    const result = await cleanupNonFollowers(client, state, makeConfig(), [], 10, 5);
+
+    expect(result.unfollowed).toEqual(["@nonfollower1", "@protecteduser"]);
+    expect(result.skipped).toContain("@nonfollower2 (active workflow)");
+  });
+
+  it("skips users targeted by active reply_track workflow", async () => {
+    const state = makeState({
+      workflows: [makeWorkflow({ id: "rt:nonfollower1:123", type: "reply_track", current_step: "waiting_audit", target_user_id: "nf1", target_username: "nonfollower1" })],
+    });
+    const client = makeMockClient();
+
+    const result = await cleanupNonFollowers(client, state, makeConfig(), [], 10, 5);
+
+    expect(result.unfollowed).toEqual(["@nonfollower2", "@protecteduser"]);
+    expect(result.skipped).toContain("@nonfollower1 (active workflow)");
+  });
+
+  it("does not skip users from completed workflows", async () => {
+    const state = makeState({
+      workflows: [makeWorkflow({ id: "fc:nonfollower2", target_user_id: "nf2", target_username: "nonfollower2", outcome: "cleaned_up", current_step: "done" })],
+    });
+    const client = makeMockClient();
+
+    const result = await cleanupNonFollowers(client, state, makeConfig(), [], 10, 5);
+
+    expect(result.unfollowed).toEqual(["@nonfollower1", "@nonfollower2", "@protecteduser"]);
+    expect(result.skipped).toEqual([]);
   });
 
   it("unfollows some then stops when budget exhausted mid-batch", async () => {

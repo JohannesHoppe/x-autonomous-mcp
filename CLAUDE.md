@@ -35,7 +35,7 @@ No Twitter SDK dependency. Auth uses `oauth-1.0a` + `crypto.createHmac`. Read op
 4. **Compact responses** — `X_MCP_COMPACT=true` (default). Drops entities, flattens metrics, resolves author_id to @username, precomputes `author_follower_ratio`.
 5. **Engagement dedup** — `X_MCP_DEDUP=true` (default). Never reply/like/retweet same tweet twice. Tracked with 90-day pruning window.
 6. **Typo-correcting parameter suggestions** — Every tool checks unknown parameters against `VALID_KEYS` map and suggests closest match via fuzzy matching. Hardcoded redirects for common mistakes (e.g., `in_reply_to` → "Use reply_to_tweet tool instead").
-7. **Destructive tool gating** — `X_MCP_ENABLE_DANGEROUS=true` required to expose `delete_tweet` and `unfollow_user`. Tools are completely hidden otherwise.
+7. **Destructive tool budget** — `delete_tweet` and `unfollow_user` are budget-limited like all other write tools. Set `X_MCP_MAX_DELETES=0` / `X_MCP_MAX_UNFOLLOWS=0` to block them entirely.
 8. **Unknown parameter detection** — All tools use `.passthrough()` Zod schemas. Unknown keys trigger typo suggestions instead of opaque validation errors.
 
 ## Key Features
@@ -77,7 +77,8 @@ X_MCP_MAX_FOLLOWS      # Daily follow limit (default 10)
 X_MCP_TOON             # TOON encoding (default: true, set "false" for JSON)
 X_MCP_COMPACT          # Compact responses (default: true)
 X_MCP_DEDUP            # Engagement dedup (default: true)
-X_MCP_ENABLE_DANGEROUS # Expose delete_tweet, unfollow_user (default: false)
+X_MCP_MAX_UNFOLLOWS    # Daily unfollow limit (default 10, 0=disabled)
+X_MCP_MAX_DELETES      # Daily delete limit (default 5, 0=disabled)
 X_MCP_STATE_FILE       # State file path (default: {cwd}/x-mcp-state.json)
 ```
 

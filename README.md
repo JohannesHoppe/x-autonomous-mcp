@@ -76,7 +76,7 @@ Valid parameters for post_tweet: text, poll_options, poll_duration_minutes, medi
 
 ### Budget-gated destructive tools
 
-`delete_tweet` and `unfollow_user` are always visible but budget-limited. Set to `0` to fully disable:
+`delete_tweet` and `unfollow_user` are budget-limited. Set to `0` to block them entirely:
 
 ```
 X_MCP_MAX_UNFOLLOWS=10   # Default 10/day. Set to 0 to block all unfollows.
@@ -321,7 +321,7 @@ Current x_budget: 0/8 replies used, 0/2 originals used, 0/20 likes used, 0/5 ret
 
 ## Workflow System
 
-The MCP includes a hardcoded workflow engine that orchestrates multi-step growth strategies. The MCP is the authority — it auto-executes all mechanical steps and only asks the LLM when it needs creative input. Workflows are persistent: if the LLM disconnects, the next `get_next_task` call resumes exactly where things left off.
+The MCP includes a hardcoded workflow engine that orchestrates multi-step growth strategies. The MCP is the authority — it auto-executes all mechanical steps and only asks the LLM when it needs creative input. Workflows are persistent: if the LLM disconnects, the next `get_next_task` call resumes exactly where things left off. Users targeted by active workflows are automatically protected from `cleanup_non_followers` — you won't accidentally unfollow someone you're in the middle of engaging with.
 
 | Workflow | Summary | Docs |
 |----------|---------|------|
@@ -440,150 +440,7 @@ X_MCP_DEDUP=true
 
 ## Connect to Your Client
 
-Pick your client below. You only need to follow one section.
-
-### Claude Code
-
-```bash
-claude mcp add --scope user x-twitter -- node /ABSOLUTE/PATH/TO/x-autonomous-mcp/dist/index.js
-```
-
-Replace `/ABSOLUTE/PATH/TO/x-autonomous-mcp` with the actual path where you cloned the repo. Then restart Claude Code.
-
-### Claude Desktop
-
-Add to your `claude_desktop_config.json`:
-
-- **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
-- **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
-
-```json
-{
-  "mcpServers": {
-    "x-twitter": {
-      "command": "node",
-      "args": ["/ABSOLUTE/PATH/TO/x-autonomous-mcp/dist/index.js"],
-      "env": {
-        "X_API_KEY": "your_consumer_key",
-        "X_API_SECRET": "your_secret_key",
-        "X_ACCESS_TOKEN": "your_access_token",
-        "X_ACCESS_TOKEN_SECRET": "your_access_token_secret",
-        "X_BEARER_TOKEN": "your_bearer_token"
-      }
-    }
-  }
-}
-```
-
-### Cursor
-
-Add to your Cursor MCP config:
-
-- **Global** (all projects): `~/.cursor/mcp.json`
-- **Project-scoped**: `.cursor/mcp.json` in your project root
-
-```json
-{
-  "mcpServers": {
-    "x-twitter": {
-      "command": "node",
-      "args": ["/ABSOLUTE/PATH/TO/x-autonomous-mcp/dist/index.js"],
-      "env": {
-        "X_API_KEY": "your_consumer_key",
-        "X_API_SECRET": "your_secret_key",
-        "X_ACCESS_TOKEN": "your_access_token",
-        "X_ACCESS_TOKEN_SECRET": "your_access_token_secret",
-        "X_BEARER_TOKEN": "your_bearer_token"
-      }
-    }
-  }
-}
-```
-
-You can also verify the connection in Cursor Settings > MCP Servers.
-
-### OpenAI Codex
-
-**Option A: CLI**
-
-```bash
-codex mcp add x-twitter --env X_API_KEY=your_consumer_key --env X_API_SECRET=your_secret_key --env X_ACCESS_TOKEN=your_access_token --env X_ACCESS_TOKEN_SECRET=your_access_token_secret --env X_BEARER_TOKEN=your_bearer_token -- node /ABSOLUTE/PATH/TO/x-autonomous-mcp/dist/index.js
-```
-
-**Option B: config.toml**
-
-Add to `~/.codex/config.toml` (global) or `.codex/config.toml` (project-scoped):
-
-```toml
-[mcp_servers.x-twitter]
-command = "node"
-args = ["/ABSOLUTE/PATH/TO/x-autonomous-mcp/dist/index.js"]
-
-[mcp_servers.x-twitter.env]
-X_API_KEY = "your_consumer_key"
-X_API_SECRET = "your_secret_key"
-X_ACCESS_TOKEN = "your_access_token"
-X_ACCESS_TOKEN_SECRET = "your_access_token_secret"
-X_BEARER_TOKEN = "your_bearer_token"
-```
-
-### Windsurf
-
-Add to `~/.codeium/windsurf/mcp_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "x-twitter": {
-      "command": "node",
-      "args": ["/ABSOLUTE/PATH/TO/x-autonomous-mcp/dist/index.js"],
-      "env": {
-        "X_API_KEY": "your_consumer_key",
-        "X_API_SECRET": "your_secret_key",
-        "X_ACCESS_TOKEN": "your_access_token",
-        "X_ACCESS_TOKEN_SECRET": "your_access_token_secret",
-        "X_BEARER_TOKEN": "your_bearer_token"
-      }
-    }
-  }
-}
-```
-
-You can also add it from Windsurf Settings > Cascade > MCP Servers.
-
-### Cline (VS Code)
-
-Open Cline's MCP settings (click the MCP Servers icon in Cline's top nav > Configure), then add to `cline_mcp_settings.json`:
-
-```json
-{
-  "mcpServers": {
-    "x-twitter": {
-      "command": "node",
-      "args": ["/ABSOLUTE/PATH/TO/x-autonomous-mcp/dist/index.js"],
-      "env": {
-        "X_API_KEY": "your_consumer_key",
-        "X_API_SECRET": "your_secret_key",
-        "X_ACCESS_TOKEN": "your_access_token",
-        "X_ACCESS_TOKEN_SECRET": "your_access_token_secret",
-        "X_BEARER_TOKEN": "your_bearer_token"
-      },
-      "alwaysAllow": [],
-      "disabled": false
-    }
-  }
-}
-```
-
-### Other MCP Clients
-
-This is a standard stdio MCP server. For any MCP-compatible client, point it at:
-
-```
-node /ABSOLUTE/PATH/TO/x-autonomous-mcp/dist/index.js
-```
-
-With these environment variables: `X_API_KEY`, `X_API_SECRET`, `X_ACCESS_TOKEN`, `X_ACCESS_TOKEN_SECRET`, `X_BEARER_TOKEN`.
+See **[Client Setup](docs/CLIENT-SETUP.md)** for configuration instructions for Claude Code, Claude Desktop, Cursor, OpenAI Codex, Windsurf, Cline, and other MCP clients.
 
 ---
 

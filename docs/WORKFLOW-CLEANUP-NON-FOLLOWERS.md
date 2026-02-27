@@ -21,11 +21,13 @@ When `cleanup_non_followers` is called:
    → Returns: { data: [...non-followers], meta: { total_following, total_followers, non_followers_count } }
 
 2. For each non-follower (up to max_unfollow):
-   a. Check protected accounts (by username AND userId)
+   a. Check active workflows (follow_cycle or reply_track targeting this user)
+      → If active workflow exists: skip, add "@username (active workflow)" to skipped list
+   b. Check protected accounts (by username AND userId)
       → If protected: skip, add "@username (protected)" to skipped list
-   b. Check unfollow budget
+   c. Check unfollow budget
       → If exhausted: add "budget exhausted — stopped" to skipped list, stop
-   c. client.unfollowUser(userId)
+   d. client.unfollowUser(userId)
       → If success: add "@username" to unfollowed list, recordAction (budget.unfollows += 1)
       → If API error: add "@username (API error)" to skipped list, continue
 
@@ -85,6 +87,30 @@ MCP responds:
   {
     "unfollowed": ["@stranger"],
     "skipped": ["@mentor (protected)", "@friend1 (protected)"],
+    "x_budget": "0/8 replies used, 0/2 originals used, ..."
+  }
+```
+
+### Active Workflow Targets Skipped
+
+```
+Bot: cleanup_non_followers(max_unfollow=10)
+
+State: active workflows:
+  → fc:alice (follow_cycle, target_user_id: "111", waiting for followback)
+  → rt:bob:1709000000 (reply_track, target_user_id: "222", waiting for audit)
+
+MCP (internally):
+  → client.getNonFollowers(5)
+  → Non-followers include @alice (id: 111) and @bob (id: 222)
+  → @alice: active workflow target → skip, add "@alice (active workflow)"
+  → @bob: active workflow target → skip, add "@bob (active workflow)"
+  → @stranger: no active workflow, not protected → unfollowUser → success
+
+MCP responds:
+  {
+    "unfollowed": ["@stranger"],
+    "skipped": ["@alice (active workflow)", "@bob (active workflow)"],
     "x_budget": "0/8 replies used, 0/2 originals used, ..."
   }
 ```
@@ -161,12 +187,17 @@ MCP responds:
 - **What happens:** Individual unfollows fail with API errors. Those users are added to the skipped list. The loop continues attempting remaining users.
 - **Mitigation:** Use a smaller `max_unfollow` value. Spread cleanup across multiple sessions.
 
-### 4. Protected account userId not resolved at startup
+### 4. Active workflow targets auto-skipped
+- **When:** During the unfollow loop, for any user that is the target of an active `follow_cycle` or `reply_track` workflow.
+- **What happens:** The user is skipped with "@username (active workflow)" in the skipped list. This prevents cleanup from undoing an in-progress follow cycle or unfollowing someone you're actively engaging with.
+- **Mitigation:** Not a problem — this is intentional. Complete or cancel the workflow first if you want to unfollow the user.
+
+### 5. Protected account userId not resolved at startup
 - **When:** During protected account check.
 - **What happens:** If `resolveProtectedAccountIds` (called at MCP server startup) failed for a username, that account's `userId` is `null`. The username check still works, but if the non-follower list only has the numeric ID (not the username), the protection check could miss it.
 - **Mitigation:** Ensure `X_MCP_PROTECTED_ACCOUNTS` usernames are spelled correctly. The startup resolution logs errors to console.
 
-### 5. Incomplete non-follower list
+### 6. Incomplete non-follower list
 - **When:** If your following or followers list exceeds `max_pages * 1000`.
 - **What happens:** The set difference may be incomplete. Some non-followers won't appear in the results.
 - **Mitigation:** Increase `max_pages`. Default is 5 (5000 users). For accounts following/followed by more than 5000, use a higher value.
@@ -185,4 +216,4 @@ MCP responds:
 | `max_unfollow` | `10` | Maximum users to unfollow in this call |
 | `max_pages` | `5` | Pages to fetch for following/followers lists (1 page = 1000 users) |
 
-**Source code:** [`src/workflow.ts`](../src/workflow.ts), function `cleanupNonFollowers` (line 514).
+**Source code:** [`src/workflow-cleanup.ts`](../src/workflow-cleanup.ts), function `cleanupNonFollowers`.
