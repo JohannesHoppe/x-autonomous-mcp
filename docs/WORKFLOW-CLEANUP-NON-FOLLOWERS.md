@@ -43,7 +43,7 @@ If the initial `getNonFollowers` API call fails, the function returns `{ unfollo
 ### Normal Run: Unfollows Low-Quality Non-Followers
 
 ```
-Bot: cleanup_non_followers(max_unfollow=5, max_pages=3)
+Bot: cleanup_non_followers()
 
 MCP (internally):
   → client.getNonFollowers(3)
