@@ -321,25 +321,13 @@ Current x_budget: 0/8 replies used, 0/2 originals used, 0/20 likes used, 0/5 ret
 
 ## Workflow System
 
-The MCP includes a hardcoded workflow engine that orchestrates multi-step growth strategies. The MCP is the authority — it auto-executes all mechanical steps and only asks the LLM when it needs creative input (writing replies, picking targets).
+The MCP includes a hardcoded workflow engine that orchestrates multi-step growth strategies. The MCP is the authority — it auto-executes all mechanical steps and only asks the LLM when it needs creative input. Workflows are persistent: if the LLM disconnects, the next `get_next_task` call resumes exactly where things left off.
 
-### How It Works
-
-```
-LLM: get_next_task()
-MCP: [auto-executes all pending steps — follow-back checks, cleanups, audits]
-MCP: "I need you to write a reply to this tweet: [context]. Return it via submit_task."
-LLM: submit_task(workflow_id, { reply_text: "..." })
-MCP: [posts reply, records ID, sets 7-day timer — all automatic]
-MCP: "Done. Next: call get_next_task."
-```
-
-If the LLM wanders off, nothing breaks. Workflows are persistent. Budgets prevent damage. Next `get_next_task` call resumes exactly where things left off.
-
-### Available Workflow Types
-
-- **follow_cycle**: Follow → like pinned → reply → wait 7d → check follow-back → cleanup if not followed back
-- **reply_track**: Track a reply for performance audit after 48h → auto-delete if zero engagement
+| Workflow | Summary | Docs |
+|----------|---------|------|
+| **follow_cycle** | Follow, like pinned, reply, wait 7d, check follow-back, cleanup | [Full spec](docs/WORKFLOW-FOLLOW-CYCLE.md) |
+| **reply_track** | Track a reply for 48h, auto-delete if zero engagement | [Full spec](docs/WORKFLOW-REPLY-TRACK.md) |
+| **cleanup_non_followers** | One-shot batch unfollow of non-followers | [Full spec](docs/WORKFLOW-CLEANUP-NON-FOLLOWERS.md) |
 
 ### Workflow Tools
 
