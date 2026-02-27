@@ -599,6 +599,210 @@ describe("processWorkflows — follow_cycle", () => {
     expect(workflow.current_step).toBe("waiting");
     expect(workflow.actions_done).toContain("reply_failed");
   });
+
+  it("skips like when like budget is exhausted", async () => {
+    const workflow = makeWorkflow({ current_step: "execute_follow" });
+    const state = makeState({
+      workflows: [workflow],
+      budget: { ...getDefaultState().budget, likes: 20 },
+    });
+    const client = makeMockClient();
+
+    await processWorkflows(state, client, makeConfig(), []);
+
+    expect(client.followUser).toHaveBeenCalled();
+    expect(client.likeTweet).not.toHaveBeenCalled();
+    expect(workflow.actions_done).toContain("followed");
+    expect(workflow.actions_done).not.toContain("liked_pinned");
+    expect(workflow.current_step).toBe("need_reply_text");
+  });
+
+  it("skips like when pinned tweet was already liked (dedup)", async () => {
+    const workflow = makeWorkflow({ current_step: "execute_follow" });
+    const state = makeState({
+      workflows: [workflow],
+      engaged: { ...getDefaultState().engaged, liked: [{ tweet_id: "pin123", at: new Date().toISOString() }] },
+    });
+    const client = makeMockClient();
+
+    await processWorkflows(state, client, makeConfig(), []);
+
+    expect(client.likeTweet).not.toHaveBeenCalled();
+    expect(workflow.actions_done).not.toContain("liked_pinned");
+    expect(workflow.current_step).toBe("need_reply_text");
+  });
+
+  it("skips like when target has no pinned tweet", async () => {
+    const workflow = makeWorkflow({ current_step: "execute_follow" });
+    const state = makeState({ workflows: [workflow] });
+    const client = makeMockClient({
+      getUser: vi.fn().mockResolvedValue({
+        result: { data: { id: "12345", public_metrics: { followers_count: 3000 } } },
+        rateLimit: "",
+      }),
+    });
+
+    await processWorkflows(state, client, makeConfig(), []);
+
+    expect(client.likeTweet).not.toHaveBeenCalled();
+    expect(workflow.actions_done).not.toContain("liked_pinned");
+    expect(workflow.context.pinned_tweet_id).toBeUndefined();
+    expect(workflow.current_step).toBe("need_reply_text");
+  });
+
+  it("falls back to first tweet when all tweets are replies", async () => {
+    const workflow = makeWorkflow({ current_step: "execute_follow" });
+    const state = makeState({ workflows: [workflow] });
+    const client = makeMockClient({
+      getTimeline: vi.fn().mockResolvedValue({
+        result: {
+          data: [
+            { id: "reply_a", text: "Reply A", referenced_tweets: [{ type: "replied_to", id: "x1" }] },
+            { id: "reply_b", text: "Reply B", referenced_tweets: [{ type: "replied_to", id: "x2" }] },
+          ],
+        },
+        rateLimit: "",
+      }),
+    });
+
+    await processWorkflows(state, client, makeConfig(), []);
+
+    expect(workflow.context.target_tweet_id).toBe("reply_a"); // falls back to first
+    expect(workflow.current_step).toBe("need_reply_text");
+  });
+
+  it("treats timeline API failure as no tweet found", async () => {
+    const workflow = makeWorkflow({ current_step: "execute_follow" });
+    const state = makeState({ workflows: [workflow] });
+    const client = makeMockClient({
+      getTimeline: vi.fn().mockRejectedValue(new Error("timeline API error")),
+    });
+
+    const result = await processWorkflows(state, client, makeConfig(), []);
+
+    expect(workflow.current_step).toBe("waiting");
+    expect(workflow.check_after).not.toBeNull();
+    expect(result.next_task).toBeNull();
+    expect(result.auto_completed.some((s: string) => s.includes("No suitable tweet"))).toBe(true);
+  });
+
+  it("skips reply when reply_text or target_tweet_id missing in context", async () => {
+    const workflow = makeWorkflow({
+      current_step: "post_reply",
+      context: {}, // missing both reply_text and target_tweet_id
+    });
+    const state = makeState({ workflows: [workflow] });
+    const client = makeMockClient();
+
+    await processWorkflows(state, client, makeConfig(), []);
+
+    expect(client.postTweet).not.toHaveBeenCalled();
+    expect(workflow.current_step).toBe("waiting");
+    expect(workflow.check_after).not.toBeNull();
+  });
+
+  it("proceeds to cleanup when followback API fails", async () => {
+    const pastDate = new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const workflow = makeWorkflow({
+      current_step: "waiting",
+      check_after: pastDate,
+      context: { pinned_tweet_id: "pin123", reply_tweet_id: "reply789" },
+    });
+    const state = makeState({ workflows: [workflow] });
+    const client = makeMockClient({
+      getFollowing: vi.fn().mockRejectedValue(new Error("rate limited")),
+    });
+
+    await processWorkflows(state, client, makeConfig(), []);
+
+    // Should have proceeded to cleanup despite API failure
+    expect(workflow.current_step).toBe("done");
+    expect(workflow.outcome).toBe("cleaned_up");
+    expect(client.unfollowUser).toHaveBeenCalled();
+  });
+
+  it("proceeds to cleanup when 5-page followback limit reached without finding ID", async () => {
+    const pastDate = new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const workflow = makeWorkflow({
+      current_step: "waiting",
+      check_after: pastDate,
+    });
+    const state = makeState({ workflows: [workflow] });
+    // Mock: target follows many people, our ID never found across 5 pages
+    const client = makeMockClient({
+      getFollowing: vi.fn().mockResolvedValue({
+        result: { data: [{ id: "other1" }, { id: "other2" }], meta: { next_token: "more" } },
+        rateLimit: "",
+      }),
+    });
+
+    await processWorkflows(state, client, makeConfig(), []);
+
+    // Should have called getFollowing exactly 5 times (MAX_PAGES)
+    expect(client.getFollowing).toHaveBeenCalledTimes(5);
+    // Not found → cleanup → done
+    expect(workflow.current_step).toBe("done");
+    expect(workflow.outcome).toBe("cleaned_up");
+  });
+
+  it("skips delete during cleanup when delete budget exhausted", async () => {
+    const workflow = makeWorkflow({
+      current_step: "cleanup",
+      context: { pinned_tweet_id: "pin123", reply_tweet_id: "reply789" },
+    });
+    const state = makeState({
+      workflows: [workflow],
+      budget: { ...getDefaultState().budget, deletes: 5 },
+    });
+    const client = makeMockClient();
+
+    await processWorkflows(state, client, makeConfig(), []);
+
+    expect(client.unlikeTweet).toHaveBeenCalledWith("pin123");
+    expect(client.deleteTweet).not.toHaveBeenCalled(); // delete budget exhausted
+    expect(client.unfollowUser).toHaveBeenCalledWith("12345");
+    expect(workflow.outcome).toBe("cleaned_up"); // unfollow succeeded
+    expect(workflow.actions_done).toContain("unliked_pinned");
+    expect(workflow.actions_done).not.toContain("deleted_reply");
+    expect(workflow.actions_done).toContain("unfollowed");
+  });
+
+  it("continues cleanup when delete API fails", async () => {
+    const workflow = makeWorkflow({
+      current_step: "cleanup",
+      context: { pinned_tweet_id: "pin123", reply_tweet_id: "reply789" },
+    });
+    const state = makeState({ workflows: [workflow] });
+    const client = makeMockClient({
+      deleteTweet: vi.fn().mockRejectedValue(new Error("delete failed")),
+    });
+
+    await processWorkflows(state, client, makeConfig(), []);
+
+    expect(client.deleteTweet).toHaveBeenCalledWith("reply789");
+    expect(workflow.actions_done).not.toContain("deleted_reply");
+    expect(workflow.actions_done).toContain("unfollowed");
+    expect(workflow.outcome).toBe("cleaned_up");
+  });
+
+  it("sets partially_cleaned_up when unfollow API fails", async () => {
+    const workflow = makeWorkflow({
+      current_step: "cleanup",
+      context: { pinned_tweet_id: "pin123", reply_tweet_id: "reply789" },
+    });
+    const state = makeState({ workflows: [workflow] });
+    const client = makeMockClient({
+      unfollowUser: vi.fn().mockRejectedValue(new Error("unfollow failed")),
+    });
+
+    await processWorkflows(state, client, makeConfig(), []);
+
+    expect(client.unfollowUser).toHaveBeenCalledWith("12345");
+    expect(workflow.actions_done).not.toContain("unfollowed");
+    expect(workflow.actions_done).toContain("unliked_pinned");
+    expect(workflow.actions_done).toContain("deleted_reply");
+    expect(workflow.outcome).toBe("partially_cleaned_up");
+  });
 });
 
 // ============================================================
@@ -715,6 +919,57 @@ describe("processWorkflows — reply_track", () => {
     expect(workflow.outcome).toBe("audit_failed");
     expect(workflow.current_step).toBe("done");
   });
+
+  it("keeps tweet when zero engagement but delete budget exhausted", async () => {
+    const workflow = makeWorkflow({
+      id: "rt:testuser:123",
+      type: "reply_track",
+      current_step: "waiting_audit",
+      created_at: new Date(Date.now() - 49 * 60 * 60 * 1000).toISOString(),
+      context: { reply_tweet_id: "reply1" },
+    });
+    const state = makeState({
+      workflows: [workflow],
+      budget: { ...getDefaultState().budget, deletes: 5 },
+    });
+    const client = makeMockClient({
+      getTweetMetrics: vi.fn().mockResolvedValue({
+        result: { data: { public_metrics: { like_count: 0, reply_count: 0, impression_count: 50 } } },
+        rateLimit: "",
+      }),
+    });
+
+    await processWorkflows(state, client, makeConfig(), []);
+
+    expect(client.deleteTweet).not.toHaveBeenCalled();
+    expect(workflow.outcome).toBe("audited_kept");
+    expect(workflow.context.audit_likes).toBe("0");
+    expect(workflow.context.audit_replies).toBe("0");
+  });
+
+  it("keeps tweet when zero engagement but delete API fails", async () => {
+    const workflow = makeWorkflow({
+      id: "rt:testuser:123",
+      type: "reply_track",
+      current_step: "waiting_audit",
+      created_at: new Date(Date.now() - 49 * 60 * 60 * 1000).toISOString(),
+      context: { reply_tweet_id: "reply1" },
+    });
+    const state = makeState({ workflows: [workflow] });
+    const client = makeMockClient({
+      getTweetMetrics: vi.fn().mockResolvedValue({
+        result: { data: { public_metrics: { like_count: 0, reply_count: 0, impression_count: 30 } } },
+        rateLimit: "",
+      }),
+      deleteTweet: vi.fn().mockRejectedValue(new Error("delete API error")),
+    });
+
+    await processWorkflows(state, client, makeConfig(), []);
+
+    expect(client.deleteTweet).toHaveBeenCalledWith("reply1");
+    expect(workflow.outcome).toBe("audited_kept"); // kept because delete failed
+    expect(workflow.context.audit_likes).toBe("0");
+  });
 });
 
 // ============================================================
@@ -804,6 +1059,20 @@ describe("cleanupNonFollowers", () => {
 
     expect(result.error).toContain("API down");
     expect(result.unfollowed).toEqual([]);
+  });
+
+  it("unfollows some then stops when budget exhausted mid-batch", async () => {
+    // Budget starts at 9/10 — first unfollow succeeds (10/10), second blocked
+    const state = makeState({
+      budget: { ...getDefaultState().budget, unfollows: 9 },
+    });
+    const client = makeMockClient();
+
+    const result = await cleanupNonFollowers(client, state, makeConfig(), [], 10, 5);
+
+    expect(result.unfollowed).toEqual(["@nonfollower1"]);
+    expect(result.skipped).toContain("budget exhausted — stopped");
+    expect(state.budget.unfollows).toBe(10);
   });
 });
 
