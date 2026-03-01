@@ -1,5 +1,17 @@
 # x-autonomous-mcp
 
+> **Don't use the X API. Don't pay for it. It's dead.**
+>
+> On February 23, 2026, X rolled out "Operation Kill the Bots" — a platform-wide restriction that blocks **all** programmatic replies to anyone who hasn't @mentioned you first. Their announcement said "non-replies will remain unchanged." That was a lie. Cold **quote tweets** are also blocked with the same 403 error. So are **@mentions in regular posts**. The API documentation still lists these features as available. They are not.
+>
+> What you're paying $200/month (Basic) or $5,000/month (Pro) for: the ability to search tweets, like them, and talk to yourself. You cannot reply to anyone. You cannot quote-tweet anyone. You cannot mention anyone in a standalone tweet. The only "engagement" left is liking posts and hoping someone notices you exist. The Free tier is obviously worthless. Enterprise (~$42,000/year) is exempt — because of course it is.
+>
+> We built this entire MCP server with budget limits, engagement dedup, workflow orchestration, compact responses, and a smart reply-to-quote fallback system. All of it works perfectly. None of it matters, because X decided that the API should be a read-only feed reader that costs thousands of dollars.
+>
+> If you're evaluating the X API for any bot, agent, or automation that involves **talking to other people**: save your money. The API is not a developer platform. It's a honeypot that takes your payment and then blocks the features you paid for, with no refund and no advance notice.
+>
+> — Updated 2026-03-01, after discovering the hard way that even our quote-tweet workaround gets 403'd.
+
 An MCP (Model Context Protocol) server that gives AI agents full access to the X (Twitter) API — with built-in safety rails for autonomous operation. Post tweets, search, read timelines, like, retweet, upload media, all through natural language. Includes daily budget limits, engagement deduplication, compact TOON-encoded responses, self-describing errors, and a workflow system where the MCP orchestrates multi-step growth strategies.
 
 Works with **Claude Code**, **Claude Desktop**, **OpenAI Codex**, **OpenClaw (ClawdBot)**, **Cursor**, **Windsurf**, **Cline**, and any other MCP-compatible client.
@@ -74,9 +86,11 @@ Unknown parameter 'poll_option': Did you mean 'poll_options'?
 Valid parameters for post_tweet: text, poll_options, poll_duration_minutes, media_ids
 ```
 
-### Cold reply auto-fallback
+### Cold reply auto-fallback (broken by X — see warning above)
 
 X's API (since Feb 2026) blocks programmatic replies unless the target author has @mentioned your account. `reply_to_tweet` handles this automatically: it checks a `mentioned_by` cache (populated by `get_mentions`) and posts a quote tweet instead when a direct reply would be blocked. The response includes `_fallback: "quote_tweet"` when this happens. Budget counts against the reply limit regardless.
+
+**Update (2026-03-01):** The quote-tweet fallback is also blocked by X. Cold quote tweets return the same 403 as cold replies. The code is correct — X just blocks everything. See the warning at the top of this README.
 
 ### Budget-gated destructive tools
 
