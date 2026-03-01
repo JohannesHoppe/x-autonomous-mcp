@@ -177,6 +177,70 @@ describe("processWorkflows — follow_cycle", () => {
     expect(state.budget.replies).toBe(1);
   });
 
+  it("falls back to quote when getTweet fails", async () => {
+    const workflow = makeWorkflow({
+      current_step: "post_reply",
+      context: { reply_text: "Great insight!", target_tweet_id: "tweet1" },
+    });
+    const state = makeState({ workflows: [workflow] });
+    const client = makeMockClient({
+      getTweet: vi.fn().mockRejectedValue(new Error("getTweet API error")),
+    });
+
+    await processWorkflows(state, client, makeConfig(), []);
+
+    // getTweet failed → authorId undefined → canReply false → quote
+    expect(client.postTweet).toHaveBeenCalledWith({
+      text: "Great insight!",
+      quote_tweet_id: "tweet1",
+    });
+    expect(workflow.actions_done).toContain("replied_as_quote");
+    expect(state.budget.replies).toBe(1);
+  });
+
+  it("falls back to quote when getTweet returns no author_id", async () => {
+    const workflow = makeWorkflow({
+      current_step: "post_reply",
+      context: { reply_text: "Great insight!", target_tweet_id: "tweet1" },
+    });
+    const state = makeState({ workflows: [workflow] });
+    const client = makeMockClient({
+      getTweet: vi.fn().mockResolvedValue({ result: { data: { id: "tweet1" } }, rateLimit: "" }),
+    });
+
+    await processWorkflows(state, client, makeConfig(), []);
+
+    // author_id missing → canReply false → quote
+    expect(client.postTweet).toHaveBeenCalledWith({
+      text: "Great insight!",
+      quote_tweet_id: "tweet1",
+    });
+    expect(workflow.actions_done).toContain("replied_as_quote");
+  });
+
+  it("falls back to quote on 403 even when author is in mentioned_by (stale cache)", async () => {
+    const workflow = makeWorkflow({
+      current_step: "post_reply",
+      context: { reply_text: "Great insight!", target_tweet_id: "tweet1" },
+    });
+    const state = makeState({ workflows: [workflow], mentioned_by: ["12345"] });
+    const client = makeMockClient({
+      postTweet: vi.fn()
+        .mockRejectedValueOnce(new Error('postTweet failed (HTTP 403): Reply to this conversation is not allowed because you have not been mentioned or otherwise engaged by the author.'))
+        .mockResolvedValueOnce({ result: { data: { id: "quote789" } }, rateLimit: "" }),
+    });
+
+    await processWorkflows(state, client, makeConfig(), []);
+
+    // First call: reply attempt → 403 (stale cache)
+    // Second call: fallback to quote
+    expect(client.postTweet).toHaveBeenCalledTimes(2);
+    expect(client.postTweet).toHaveBeenNthCalledWith(1, { text: "Great insight!", reply_to: "tweet1" });
+    expect(client.postTweet).toHaveBeenNthCalledWith(2, { text: "Great insight!", quote_tweet_id: "tweet1" });
+    expect(workflow.actions_done).toContain("replied_as_quote");
+    expect(workflow.context.reply_tweet_id).toBe("quote789");
+  });
+
   it("skips waiting workflows that haven't reached check_after", async () => {
     const futureDate = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
     const workflow = makeWorkflow({

@@ -154,17 +154,20 @@ The MCP posts the reply and sets a 7-day timer.
 - Reply budget (`X_MCP_MAX_REPLIES`, default 8/day). If exhausted: skips reply, sets 7-day wait.
 
 **Actions:**
-1. `client.postTweet({ text: reply_text, reply_to: target_tweet_id })` — posts the reply.
-2. Stores `reply_tweet_id` in context (for later deletion).
-3. `recordAction("reply_to_tweet", target_tweet_id, state)` — increments `state.budget.replies`, adds to `state.engaged.replied_to`.
+1. `client.getTweet(target_tweet_id)` — resolves author. If this fails, `authorId` is undefined.
+2. Checks if `authorId` is in `state.mentioned_by` (populated by `get_mentions`).
+   - **Author in cache:** Attempts `client.postTweet({ text, reply_to: target_tweet_id })`. If X returns 403 ("not been mentioned"), falls back to quote tweet.
+   - **Author not in cache (or getTweet failed):** Posts `client.postTweet({ text, quote_tweet_id: target_tweet_id })` directly (avoids triggering the 403).
+3. Stores `reply_tweet_id` in context (for later deletion).
+4. `recordAction("reply_to_tweet", target_tweet_id, state)` — increments `state.budget.replies`, adds to `state.engaged.replied_to`. If quote was used, also adds to `state.engaged.quoted`.
 
 **Context stored:**
 | Key | Value | Source |
 |-----|-------|--------|
 | `reply_text` | LLM-composed reply | submit_task |
-| `reply_tweet_id` | ID of posted reply | postTweet response |
+| `reply_tweet_id` | ID of posted reply or quote | postTweet response |
 
-**Actions recorded:** `"replied"` (success) or `"reply_failed"` (API error).
+**Actions recorded:** `"replied"` (direct reply), `"replied_as_quote"` (quote fallback), or `"reply_failed"` (API error).
 
 **Budget consumed:** `replies` (+1) on success.
 
@@ -273,6 +276,8 @@ MCP (internally):
   → Stores reply_text in context
   → Advances to post_reply
   → checkBudget("reply_to_tweet") → OK (1/8)
+  → client.getTweet("t1") → author_id = "123456"
+  → "123456" in mentioned_by? If yes → reply. If no → quote tweet (cold reply fallback).
   → client.postTweet({ text: "100% — composability is the killer feature", reply_to: "t1" })
   → Stores reply_tweet_id = "reply1"
   → recordAction → budget.replies = 1, engaged.replied_to += "t1"
@@ -397,6 +402,7 @@ MCP (internally, during cleanup):
 ### 5. Reply posting fails (API error)
 - **When:** `post_reply` step, during `client.postTweet()`.
 - **What happens:** `"reply_failed"` recorded in `actions_done`. Workflow advances to `waiting`. No `reply_tweet_id` stored, so cleanup won't try to delete a nonexistent reply.
+- **Note:** If the reply gets a 403 cold-reply block and the author was in `mentioned_by` (stale cache), the MCP automatically retries as a quote tweet before giving up. Only non-403 errors or quote failures trigger `"reply_failed"`.
 - **Mitigation:** None needed. The workflow continues to check_followback as normal.
 
 ### 6. Followback false negative (target follows >5000 people)
@@ -450,7 +456,8 @@ interface Workflow {
     reply_tweet_id?: string;       // Posted reply ID (for deletion in cleanup)
   };
   actions_done: string[];          // Audit trail: "followed", "liked_pinned", "replied",
-                                   // "reply_failed", "unliked_pinned", "deleted_reply", "unfollowed"
+                                   // "replied_as_quote", "reply_failed", "unliked_pinned",
+                                   // "deleted_reply", "unfollowed"
   outcome: string | null;          // null = active, or one of the outcomes above
 }
 ```

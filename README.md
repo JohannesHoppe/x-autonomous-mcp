@@ -74,6 +74,10 @@ Unknown parameter 'poll_option': Did you mean 'poll_options'?
 Valid parameters for post_tweet: text, poll_options, poll_duration_minutes, media_ids
 ```
 
+### Cold reply auto-fallback
+
+X's API (since Feb 2026) blocks programmatic replies unless the target author has @mentioned your account. `reply_to_tweet` handles this automatically: it checks a `mentioned_by` cache (populated by `get_mentions`) and posts a quote tweet instead when a direct reply would be blocked. The response includes `_fallback: "quote_tweet"` when this happens. Budget counts against the reply limit regardless.
+
 ### Budget-gated destructive tools
 
 `delete_tweet` and `unfollow_user` are budget-limited. Set to `0` to block them entirely:
