@@ -38,6 +38,7 @@ export interface StateFile {
     quoted: EngagedEntry[];
     followed: EngagedEntry[]; // tweet_id holds user_id for follows
   };
+  mentioned_by: string[]; // user_ids of authors who have @mentioned us (for reply eligibility)
   workflows: Workflow[];
 }
 
@@ -79,6 +80,7 @@ export function getDefaultState(): StateFile {
       quoted: [],
       followed: [],
     },
+    mentioned_by: [],
     workflows: [],
   };
 }
@@ -163,6 +165,12 @@ function validateState(raw: unknown): StateFile {
 
   const workflows = pruneWorkflows(asWorkflowArray(obj.workflows));
 
+  // mentioned_by: deduplicated string[] of user IDs, capped at 10,000
+  const rawMentioned = Array.isArray(obj.mentioned_by)
+    ? obj.mentioned_by.filter((v: unknown): v is string => typeof v === "string")
+    : [];
+  const mentionedBy = [...new Set(rawMentioned)].slice(-10_000);
+
   return {
     budget: {
       date: today,
@@ -182,6 +190,7 @@ function validateState(raw: unknown): StateFile {
       quoted: pruneEngaged(asEngagedArray(engaged.quoted)),
       followed: pruneEngaged(asEngagedArray(engaged.followed)),
     },
+    mentioned_by: mentionedBy,
     workflows,
   };
 }

@@ -7,9 +7,9 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { z } from "zod";
 import { XApiClient } from "./x-api.js";
-import { parseTweetId, errorMessage, formatResult } from "./helpers.js";
+import { parseTweetId, errorMessage, formatResult, isColdReplyBlocked } from "./helpers.js";
 import { encode } from "./toon.js";
-import { loadState, saveState } from "./state.js";
+import { loadState, saveState, type StateFile } from "./state.js";
 import {
   loadBudgetConfig,
   formatBudgetString,
@@ -126,6 +126,7 @@ const VALID_KEYS: Record<string, string[]> = {
 
 interface WrapOptions {
   getTargetTweetId?: (args: Record<string, unknown>) => string | Promise<string>;
+  postProcess?: (result: unknown, state: StateFile) => void;
 }
 
 type ToolResult = {
@@ -135,7 +136,7 @@ type ToolResult = {
 
 function wrapHandler(
   toolName: string,
-  handler: (args: Record<string, unknown>, resolvedTargetId?: string) => Promise<{ result: unknown; rateLimit: string }>,
+  handler: (args: Record<string, unknown>, resolvedTargetId: string | undefined, state: StateFile) => Promise<{ result: unknown; rateLimit: string; quoteFallback?: boolean }>,
   opts?: WrapOptions,
 ): (args: Record<string, unknown>) => Promise<ToolResult> {
   return async (args) => {
@@ -185,12 +186,32 @@ function wrapHandler(
         }
       }
 
-      // Execute the actual API call, passing resolved ID to avoid re-parsing
-      const { result, rateLimit } = await handler(args, targetId);
+      // Execute the actual API call, passing resolved ID and state
+      const { result, rateLimit, quoteFallback } = await handler(args, targetId, state);
 
-      // Record action and save state only for write tools
+      // Record action for write tools
       if (isWriteTool(toolName)) {
         recordAction(toolName, targetId ?? null, state);
+      }
+
+      // Quote fallback: also record in quoted dedup set + inject _fallback
+      if (quoteFallback && targetId) {
+        const now = new Date().toISOString();
+        if (!state.engaged.quoted.some((e) => e.tweet_id === targetId)) {
+          state.engaged.quoted.push({ tweet_id: targetId, at: now });
+        }
+        if (result && typeof result === "object") {
+          (result as Record<string, unknown>)._fallback = "quote_tweet";
+        }
+      }
+
+      // Post-process hook (e.g. get_mentions populating mentioned_by)
+      if (opts?.postProcess) {
+        opts.postProcess(result, state);
+      }
+
+      // Save state if anything mutated it
+      if (isWriteTool(toolName) || quoteFallback || opts?.postProcess) {
         saveState(statePath, state);
       }
 
@@ -253,12 +274,39 @@ server.registerTool(
       media_ids: z.array(z.string()).optional().describe("Media IDs to attach"),
     }).passthrough(),
   },
-  wrapHandler("reply_to_tweet", async (args, resolvedId) => {
-    return client.postTweet({
-      text: args.text as string,
-      reply_to: resolvedId!,
-      media_ids: args.media_ids as string[] | undefined,
-    });
+  wrapHandler("reply_to_tweet", async (args, resolvedId, state) => {
+    const tweetId = resolvedId!;
+    const text = args.text as string;
+    const mediaIds = args.media_ids as string[] | undefined;
+
+    // Resolve target tweet author to check mentioned_by cache
+    let authorId: string | undefined;
+    try {
+      const { result: tweetData } = await client.getTweet(tweetId);
+      authorId = (tweetData as { data?: { author_id?: string } })?.data?.author_id;
+    } catch {
+      // getTweet failure — fall through to quote path
+    }
+
+    const canReply = authorId ? state.mentioned_by.includes(authorId) : false;
+
+    if (canReply) {
+      // Author has mentioned us — try direct reply, fallback to quote on 403
+      try {
+        return await client.postTweet({ text, reply_to: tweetId, media_ids: mediaIds });
+      } catch (err) {
+        if (isColdReplyBlocked(err)) {
+          // Stale cache — fallback to quote
+          const quoteResult = await client.postTweet({ text, quote_tweet_id: tweetId, media_ids: mediaIds });
+          return { ...quoteResult, quoteFallback: true };
+        }
+        throw err;
+      }
+    } else {
+      // Author hasn't mentioned us — go straight to quote tweet
+      const quoteResult = await client.postTweet({ text, quote_tweet_id: tweetId, media_ids: mediaIds });
+      return { ...quoteResult, quoteFallback: true };
+    }
   }, { getTargetTweetId: (args) => parseTweetId(args.tweet_id as string) }),
 );
 
@@ -406,6 +454,22 @@ server.registerTool(
       args.next_token as string | undefined,
       args.since_id as string | undefined,
     );
+  }, {
+    postProcess: (result, state) => {
+      // Extract author_ids from mentions and add to mentioned_by cache
+      const data = result as { data?: Array<{ author_id?: string }> };
+      if (data?.data && Array.isArray(data.data)) {
+        for (const tweet of data.data) {
+          if (tweet.author_id && !state.mentioned_by.includes(tweet.author_id)) {
+            state.mentioned_by.push(tweet.author_id);
+          }
+        }
+        // Cap at 10,000 entries (drop oldest)
+        if (state.mentioned_by.length > 10_000) {
+          state.mentioned_by = state.mentioned_by.slice(-10_000);
+        }
+      }
+    },
   }),
 );
 

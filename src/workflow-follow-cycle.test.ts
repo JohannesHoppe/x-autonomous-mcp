@@ -53,6 +53,7 @@ function makeMockClient(overrides?: Partial<Record<string, unknown>>): XApiClien
       },
       rateLimit: "",
     }),
+    getTweet: vi.fn().mockResolvedValue({ result: { data: { id: "tweet1", author_id: "12345" } }, rateLimit: "" }),
     postTweet: vi.fn().mockResolvedValue({ result: { data: { id: "reply789" } }, rateLimit: "" }),
     deleteTweet: vi.fn().mockResolvedValue({ result: { data: { deleted: true } }, rateLimit: "" }),
     unfollowUser: vi.fn().mockResolvedValue({ result: { data: { following: false } }, rateLimit: "" }),
@@ -129,7 +130,7 @@ describe("processWorkflows — follow_cycle", () => {
     expect(result.auto_completed[0]).toContain("budget exhausted");
   });
 
-  it("posts reply and sets check-back date", async () => {
+  it("posts as quote tweet when author not in mentioned_by", async () => {
     const workflow = makeWorkflow({
       current_step: "post_reply",
       context: { reply_text: "Great insight!", target_tweet_id: "tweet1" },
@@ -139,16 +140,40 @@ describe("processWorkflows — follow_cycle", () => {
 
     await processWorkflows(state, client, makeConfig(), []);
 
+    // Author "12345" is NOT in mentioned_by → falls back to quote tweet
+    expect(client.getTweet).toHaveBeenCalledWith("tweet1");
+    expect(client.postTweet).toHaveBeenCalledWith({
+      text: "Great insight!",
+      quote_tweet_id: "tweet1",
+    });
+    expect(workflow.current_step).toBe("waiting");
+    expect(workflow.check_after).not.toBeNull();
+    expect(workflow.context.reply_tweet_id).toBe("reply789");
+    expect(workflow.actions_done).toContain("replied_as_quote");
+
+    // Verify budget counter incremented and quoted dedup recorded
+    expect(state.budget.replies).toBe(1);
+    expect(state.engaged.quoted.some((e) => e.tweet_id === "tweet1")).toBe(true);
+  });
+
+  it("posts direct reply when author is in mentioned_by", async () => {
+    const workflow = makeWorkflow({
+      current_step: "post_reply",
+      context: { reply_text: "Great insight!", target_tweet_id: "tweet1" },
+    });
+    // Author "12345" IS in mentioned_by
+    const state = makeState({ workflows: [workflow], mentioned_by: ["12345"] });
+    const client = makeMockClient();
+
+    await processWorkflows(state, client, makeConfig(), []);
+
     expect(client.postTweet).toHaveBeenCalledWith({
       text: "Great insight!",
       reply_to: "tweet1",
     });
     expect(workflow.current_step).toBe("waiting");
-    expect(workflow.check_after).not.toBeNull();
     expect(workflow.context.reply_tweet_id).toBe("reply789");
     expect(workflow.actions_done).toContain("replied");
-
-    // Verify budget counter incremented
     expect(state.budget.replies).toBe(1);
   });
 

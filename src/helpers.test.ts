@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseTweetId, errorMessage, formatResult } from "./helpers.js";
+import { parseTweetId, errorMessage, formatResult, isColdReplyBlocked } from "./helpers.js";
 
 describe("parseTweetId", () => {
   it("parses raw numeric ID", () => {
@@ -161,5 +161,36 @@ describe("formatResult", () => {
     const parsed = JSON.parse(result);
     expect(parsed.data.id).toBe("1");
     expect(parsed.x_rate_limit).toBe("5/15");
+  });
+});
+
+describe("isColdReplyBlocked", () => {
+  it("detects the X API cold reply 403 error", () => {
+    const err = new Error(
+      'postTweet failed (HTTP 403): Reply to this conversation is not allowed because you have not been mentioned or otherwise engaged by the author. Rate limit: 299/300 remaining.',
+    );
+    expect(isColdReplyBlocked(err)).toBe(true);
+  });
+
+  it("rejects non-Error values", () => {
+    expect(isColdReplyBlocked("some string")).toBe(false);
+    expect(isColdReplyBlocked(null)).toBe(false);
+    expect(isColdReplyBlocked(undefined)).toBe(false);
+    expect(isColdReplyBlocked(403)).toBe(false);
+  });
+
+  it("rejects other 403 errors", () => {
+    const err = new Error("postTweet failed (HTTP 403): Forbidden.");
+    expect(isColdReplyBlocked(err)).toBe(false);
+  });
+
+  it("rejects non-403 errors with similar text", () => {
+    const err = new Error("not been mentioned");
+    expect(isColdReplyBlocked(err)).toBe(false);
+  });
+
+  it("rejects unrelated errors", () => {
+    const err = new Error("postTweet failed (HTTP 429): Rate limited.");
+    expect(isColdReplyBlocked(err)).toBe(false);
   });
 });

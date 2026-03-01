@@ -59,6 +59,22 @@ MCP: { "next_task": null, "status": "No tasks pending. 5 workflows waiting (earl
 
 ---
 
+## Cold Reply Fallback
+
+X's "Operation Kill the Bots" (Feb 2026) blocks programmatic replies to authors who haven't @mentioned you. The MCP handles this automatically:
+
+- `get_mentions` populates a `mentioned_by` cache of author IDs who have @mentioned your account.
+- When `reply_to_tweet` is called, the MCP resolves the target tweet's author and checks the cache.
+- **Author in cache** → direct reply is attempted. If it still gets a 403 (stale cache), it falls back to a quote tweet.
+- **Author not in cache** → the MCP posts a quote tweet directly (no 403 triggered).
+- The response includes `_fallback: "quote_tweet"` when a quote was used instead of a reply.
+- Budget counts against the **reply** budget regardless — you intended to reply.
+- The same logic applies to workflow `post_reply` steps.
+
+No action needed from the agent. Just use `reply_to_tweet` as before. Call `get_mentions` early in your session to warm the cache.
+
+---
+
 ## Algorithm Rules
 
 Based on X's [open-sourced algorithm](https://github.com/twitter/the-algorithm-ml/blob/main/projects/home/recap/README.md) (April 2023). Weights may have changed since.

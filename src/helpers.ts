@@ -13,6 +13,15 @@ export function parseTweetId(input: string): string {
 }
 
 /**
+ * Detect the X API "Operation Kill the Bots" 403 error on cold replies.
+ * Returns true if the error is a 403 specifically about not being mentioned.
+ */
+export function isColdReplyBlocked(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  return /HTTP 403/.test(error.message) && /not been mentioned/.test(error.message);
+}
+
+/**
  * Safely extract a message string from an unknown error value.
  */
 export function errorMessage(e: unknown): string {

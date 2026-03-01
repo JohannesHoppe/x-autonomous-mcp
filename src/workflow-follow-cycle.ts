@@ -1,6 +1,7 @@
 import type { Workflow, XApiClient, StateFile, BudgetConfig, LlmTask, AdvanceResult } from "./workflow-types.js";
 import type { ProtectedAccount } from "./safety.js";
 import { checkBudget, recordAction, checkDedup, isProtectedAccount } from "./safety.js";
+import { isColdReplyBlocked } from "./helpers.js";
 
 // --- Follow Cycle State Machine ---
 // Steps: execute_follow → get_reply_context → need_reply_text → post_reply → waiting → check_followback → cleanup → done
@@ -131,18 +132,55 @@ export async function advanceFollowCycle(
     }
 
     try {
-      const { result } = await client.postTweet({
-        text: replyText,
-        reply_to: targetTweetId,
-      });
-      const data = result as { data?: { id?: string } };
-      if (data.data?.id) {
-        workflow.context.reply_tweet_id = data.data.id;
+      // Check if reply is possible (author must have @mentioned us)
+      let authorId: string | undefined;
+      try {
+        const { result: tweetData } = await client.getTweet(targetTweetId);
+        authorId = (tweetData as { data?: { author_id?: string } })?.data?.author_id;
+      } catch {
+        // getTweet failure — fall through to quote path
       }
+
+      const canReply = authorId ? state.mentioned_by.includes(authorId) : false;
+      let usedQuote = false;
+
+      if (canReply) {
+        // Author has mentioned us — try direct reply, fallback to quote on 403
+        try {
+          const { result } = await client.postTweet({ text: replyText, reply_to: targetTweetId });
+          const data = result as { data?: { id?: string } };
+          if (data.data?.id) workflow.context.reply_tweet_id = data.data.id;
+        } catch (err) {
+          if (isColdReplyBlocked(err)) {
+            const { result } = await client.postTweet({ text: replyText, quote_tweet_id: targetTweetId });
+            const data = result as { data?: { id?: string } };
+            if (data.data?.id) workflow.context.reply_tweet_id = data.data.id;
+            usedQuote = true;
+          } else {
+            throw err;
+          }
+        }
+      } else {
+        // Author hasn't mentioned us — go straight to quote tweet
+        const { result } = await client.postTweet({ text: replyText, quote_tweet_id: targetTweetId });
+        const data = result as { data?: { id?: string } };
+        if (data.data?.id) workflow.context.reply_tweet_id = data.data.id;
+        usedQuote = true;
+      }
+
       recordAction("reply_to_tweet", targetTweetId, state);
-      workflow.actions_done.push("replied");
+      if (usedQuote) {
+        // Also track in quoted dedup set
+        const now = new Date().toISOString();
+        if (!state.engaged.quoted.some((e) => e.tweet_id === targetTweetId)) {
+          state.engaged.quoted.push({ tweet_id: targetTweetId, at: now });
+        }
+        workflow.actions_done.push("replied_as_quote");
+      } else {
+        workflow.actions_done.push("replied");
+      }
     } catch {
-      // Reply failure — continue to waiting state anyway
+      // Reply/quote failure — continue to waiting state anyway
       workflow.actions_done.push("reply_failed");
     }
 

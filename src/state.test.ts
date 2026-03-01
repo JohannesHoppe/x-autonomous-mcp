@@ -192,6 +192,7 @@ describe("saveState", () => {
         quoted: [{ tweet_id: "ccc", at: now }],
         followed: [],
       },
+      mentioned_by: [],
       workflows: [],
     };
 
@@ -541,5 +542,77 @@ describe("dedup pruning", () => {
 
     const state = loadState(filePath);
     expect(state.engaged.replied_to).toHaveLength(2);
+  });
+});
+
+describe("mentioned_by", () => {
+  let filePath: string;
+  beforeEach(() => { filePath = tmpFile(); });
+  afterEach(() => { cleanup(filePath); });
+
+  it("default state has empty mentioned_by", () => {
+    const state = getDefaultState();
+    expect(state.mentioned_by).toEqual([]);
+  });
+
+  it("round-trips through save/load", () => {
+    const state = getDefaultState();
+    state.mentioned_by = ["111", "222", "333"];
+    saveState(filePath, state);
+
+    const loaded = loadState(filePath);
+    expect(loaded.mentioned_by).toEqual(["111", "222", "333"]);
+  });
+
+  it("filters non-string values", () => {
+    fs.writeFileSync(filePath, JSON.stringify({
+      ...getDefaultState(),
+      mentioned_by: ["valid", 42, null, "also_valid", undefined, { id: "bad" }],
+    }));
+
+    const loaded = loadState(filePath);
+    expect(loaded.mentioned_by).toEqual(["valid", "also_valid"]);
+  });
+
+  it("deduplicates entries", () => {
+    fs.writeFileSync(filePath, JSON.stringify({
+      ...getDefaultState(),
+      mentioned_by: ["111", "222", "111", "333", "222"],
+    }));
+
+    const loaded = loadState(filePath);
+    expect(loaded.mentioned_by).toEqual(["111", "222", "333"]);
+  });
+
+  it("caps at 10,000 entries (keeps newest)", () => {
+    const ids = Array.from({ length: 12_000 }, (_, i) => `user_${i}`);
+    fs.writeFileSync(filePath, JSON.stringify({
+      ...getDefaultState(),
+      mentioned_by: ids,
+    }));
+
+    const loaded = loadState(filePath);
+    expect(loaded.mentioned_by).toHaveLength(10_000);
+    expect(loaded.mentioned_by[0]).toBe("user_2000");
+    expect(loaded.mentioned_by[9999]).toBe("user_11999");
+  });
+
+  it("falls back to empty array when missing", () => {
+    const raw = getDefaultState() as Record<string, unknown>;
+    delete raw.mentioned_by;
+    fs.writeFileSync(filePath, JSON.stringify(raw));
+
+    const loaded = loadState(filePath);
+    expect(loaded.mentioned_by).toEqual([]);
+  });
+
+  it("falls back to empty array when not an array", () => {
+    fs.writeFileSync(filePath, JSON.stringify({
+      ...getDefaultState(),
+      mentioned_by: "not-an-array",
+    }));
+
+    const loaded = loadState(filePath);
+    expect(loaded.mentioned_by).toEqual([]);
   });
 });
