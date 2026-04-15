@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.4](https://github.com/2060-io/x-autonomous-mcp/compare/v0.1.3...v0.1.4) (2026-04-15)
+
+
+### Bug Fixes
+
+* use --outputTransport flag for supergateway streamableHttp ([8b12e51](https://github.com/2060-io/x-autonomous-mcp/commit/8b12e51ab6d7fd87fb19100534f431c23b0e28e9))
+* use --outputTransport flag for supergateway streamableHttp ([ce9fad7](https://github.com/2060-io/x-autonomous-mcp/commit/ce9fad7917b63b4b12219afd37ae47153e636e0d))
+
 ## [0.1.3](https://github.com/2060-io/x-autonomous-mcp/compare/v0.1.2...v0.1.3) (2026-04-15)
 
 
