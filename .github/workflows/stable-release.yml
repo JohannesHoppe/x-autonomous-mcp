@@ -57,6 +57,7 @@ jobs:
           push: true
           tags: |
             ${{ secrets.DOCKER_HUB_LOGIN }}/${{ env.IMAGE_NAME }}:${{ steps.release-please.outputs.tag_name }}
+            ${{ secrets.DOCKER_HUB_LOGIN }}/${{ env.IMAGE_NAME }}:latest
 
       - name: Log in to Docker Hub Helm Registry
         if: ${{ steps.release-please.outputs.releases_created == 'true' }}
