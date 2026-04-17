@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.5](https://github.com/2060-io/x-autonomous-mcp/compare/v0.1.4...v0.1.5) (2026-04-17)
+
+
+### Bug Fixes
+
+* **media:** use v2 /media/upload endpoint, drop deprecated v1.1 subdomain ([090fcb9](https://github.com/2060-io/x-autonomous-mcp/commit/090fcb978b9a4398a498d0cf67f1a5e675d3617d))
+* **media:** use v2 /media/upload endpoint, drop deprecated v1.1 subdomain ([f8bdde6](https://github.com/2060-io/x-autonomous-mcp/commit/f8bdde6c8a73910d8207dc7f67553491c30bbaff))
+
 ## [0.1.4](https://github.com/2060-io/x-autonomous-mcp/compare/v0.1.3...v0.1.4) (2026-04-15)
 
 
