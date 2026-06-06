@@ -41,12 +41,31 @@ function requireEnv(name: string): string {
   return value;
 }
 
+function readBackend(): "x-api" | "hermes" {
+  const value = (process.env.X_MCP_READ_BACKEND ?? "x-api").toLowerCase();
+  if (value === "x-api" || value === "hermes") return value;
+  throw new Error("X_MCP_READ_BACKEND must be either 'x-api' or 'hermes'.");
+}
+
+function hermesApiKey(): string | undefined {
+  return process.env.HERMES_TWEET_API_KEY || process.env.XQUIK_API_KEY;
+}
+
+const selectedReadBackend = readBackend();
+const selectedHermesApiKey = hermesApiKey();
+if (selectedReadBackend === "hermes" && !selectedHermesApiKey) {
+  throw new Error("X_MCP_READ_BACKEND=hermes requires HERMES_TWEET_API_KEY or XQUIK_API_KEY.");
+}
+
 const client = new XApiClient({
   apiKey: requireEnv("X_API_KEY"),
   apiSecret: requireEnv("X_API_SECRET"),
   accessToken: requireEnv("X_ACCESS_TOKEN"),
   accessTokenSecret: requireEnv("X_ACCESS_TOKEN_SECRET"),
   bearerToken: requireEnv("X_BEARER_TOKEN"),
+  readBackend: selectedReadBackend,
+  hermesApiKey: selectedHermesApiKey,
+  hermesBaseUrl: process.env.HERMES_TWEET_BASE_URL || process.env.XQUIK_BASE_URL,
 });
 
 // --- Safety feature configuration ---
