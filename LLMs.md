@@ -14,6 +14,8 @@ The `text` field always contains the full tweet text, even for premium long twee
 
 Every response includes `x_budget` — your remaining daily budget. Watch it.
 
+If `X_MCP_READ_BACKEND=hermes` is configured, supported public read tools may return `x_rate_limit: Hermes Tweet read backend`. Use the same tool names and response fields. Writes, authenticated mentions, metrics, lists, and unsupported read options still use the native X API credentials and safety rails.
+
 ---
 
 ## Workflow System

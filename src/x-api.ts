@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import OAuth from "oauth-1.0a";
+import { HermesTweetReadClient } from "./hermes-tweet.js";
 
 const DEFAULT_API_BASE = "https://api.x.com/2";
 const UPLOAD_BASE = "https://upload.twitter.com/1.1";
@@ -28,6 +29,9 @@ export interface XApiConfig {
   accessTokenSecret: string;
   bearerToken: string;
   apiBase?: string; // default: "https://api.x.com/2"
+  readBackend?: "x-api" | "hermes";
+  hermesApiKey?: string;
+  hermesBaseUrl?: string;
 }
 
 export class XApiClient {
@@ -35,6 +39,7 @@ export class XApiClient {
   private token: OAuth.Token;
   private bearerToken: string;
   private apiBase: string;
+  private hermesReadClient: HermesTweetReadClient | null = null;
   private authenticatedUserIdPromise: Promise<string> | null = null;
 
   constructor(private config: XApiConfig) {
@@ -48,6 +53,12 @@ export class XApiClient {
     });
     this.token = { key: config.accessToken, secret: config.accessTokenSecret };
     this.bearerToken = config.bearerToken;
+    if (config.readBackend === "hermes" && config.hermesApiKey) {
+      this.hermesReadClient = new HermesTweetReadClient({
+        apiKey: config.hermesApiKey,
+        baseUrl: config.hermesBaseUrl,
+      });
+    }
   }
 
   // --- Internal helpers ---
@@ -217,6 +228,10 @@ export class XApiClient {
   }
 
   async getTweet(tweetId: string) {
+    if (this.hermesReadClient) {
+      return this.hermesReadClient.getTweet(tweetId);
+    }
+
     const params = new URLSearchParams({
       "tweet.fields": "created_at,public_metrics,author_id,conversation_id,in_reply_to_user_id,referenced_tweets,entities,lang,note_tweet",
       expansions: "author_id",
@@ -233,6 +248,10 @@ export class XApiClient {
     nextToken?: string,
     filters?: { minLikes?: number; minRetweets?: number; sortOrder?: string; sinceId?: string },
   ) {
+    if (this.hermesReadClient && !filters?.sinceId) {
+      return this.hermesReadClient.searchTweets(query, maxResults, nextToken, filters);
+    }
+
     const hasEngagementFilters = filters && (filters.minLikes || filters.minRetweets);
     // When filtering by engagement, fetch max results to have enough after filtering
     const fetchCount = hasEngagementFilters ? 100 : Math.min(Math.max(maxResults, 10), 100);
@@ -286,6 +305,10 @@ export class XApiClient {
   // --- User operations ---
 
   async getUser(params: { username?: string; userId?: string }) {
+    if (this.hermesReadClient) {
+      return this.hermesReadClient.getUser(params);
+    }
+
     const fields = new URLSearchParams({
       "user.fields": "created_at,description,public_metrics,verified,url,location,pinned_tweet_id",
     });
@@ -304,6 +327,10 @@ export class XApiClient {
   }
 
   async getTimeline(userId: string, maxResults: number = 10, nextToken?: string) {
+    if (this.hermesReadClient) {
+      return this.hermesReadClient.getTimeline(userId, maxResults, nextToken);
+    }
+
     const params = new URLSearchParams({
       max_results: Math.min(Math.max(maxResults, 5), 100).toString(),
       "tweet.fields": "created_at,public_metrics,author_id,conversation_id,referenced_tweets,entities,lang,note_tweet",
@@ -334,6 +361,10 @@ export class XApiClient {
   }
 
   async getFollowers(userId: string, maxResults: number = 100, nextToken?: string) {
+    if (this.hermesReadClient) {
+      return this.hermesReadClient.getFollowers(userId, maxResults, nextToken);
+    }
+
     const params = new URLSearchParams({
       max_results: Math.min(Math.max(maxResults, 1), 1000).toString(),
       "user.fields": "created_at,description,public_metrics,verified,pinned_tweet_id",
@@ -346,6 +377,10 @@ export class XApiClient {
   }
 
   async getFollowing(userId: string, maxResults: number = 100, nextToken?: string) {
+    if (this.hermesReadClient) {
+      return this.hermesReadClient.getFollowing(userId, maxResults, nextToken);
+    }
+
     const params = new URLSearchParams({
       max_results: Math.min(Math.max(maxResults, 1), 1000).toString(),
       "user.fields": "created_at,description,public_metrics,verified,pinned_tweet_id",

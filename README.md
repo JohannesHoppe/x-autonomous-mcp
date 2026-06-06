@@ -424,7 +424,22 @@ X_ACCESS_TOKEN=your_access_token
 X_ACCESS_TOKEN_SECRET=your_access_token_secret
 ```
 
-### 4. Configure safety features (optional)
+### 4. Configure an optional read backend
+
+Native X API reads are the default. If you also use [Hermes Tweet](https://github.com/Xquik-dev/hermes-tweet), you can route supported public reads through Hermes Tweet / Xquik while keeping writes, authenticated mentions, metrics, lists, and unsupported read options on the native X API path.
+
+```
+X_MCP_READ_BACKEND=hermes
+HERMES_TWEET_API_KEY=xq_your_api_key_here
+# Optional, defaults to https://xquik.com
+HERMES_TWEET_BASE_URL=https://xquik.com
+```
+
+Supported tools on the Hermes read backend: `get_tweet`, `search_tweets`, `get_user`, `get_timeline`, `get_followers`, and `get_following`. `search_tweets` falls back to the native X API when `since_id` is used, because Hermes Tweet accepts time-window pagination rather than X API `since_id`.
+
+`XQUIK_API_KEY` and `XQUIK_BASE_URL` are also accepted aliases for existing Hermes Tweet installations.
+
+### 5. Configure safety features (optional)
 
 See `.env.example` for all available options:
 

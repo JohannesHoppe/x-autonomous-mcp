@@ -73,11 +73,12 @@ describe("loadState", () => {
   });
 
   it("loads valid state file", () => {
+    const recentTimestamp = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const existing = {
       budget: { date: todayString(), replies: 3, originals: 1, likes: 5, retweets: 2 },
-      last_write_at: "2026-02-23T10:00:00.000Z",
+      last_write_at: recentTimestamp,
       engaged: {
-        replied_to: [{ tweet_id: "111", at: "2026-02-23T10:00:00.000Z" }],
+        replied_to: [{ tweet_id: "111", at: recentTimestamp }],
         liked: [],
         retweeted: [],
         quoted: [],
@@ -88,7 +89,7 @@ describe("loadState", () => {
     const state = loadState(filePath);
     expect(state.budget.replies).toBe(3);
     expect(state.budget.originals).toBe(1);
-    expect(state.last_write_at).toBe("2026-02-23T10:00:00.000Z");
+    expect(state.last_write_at).toBe(recentTimestamp);
     expect(state.engaged.replied_to).toHaveLength(1);
     expect(state.engaged.replied_to[0].tweet_id).toBe("111");
   });
